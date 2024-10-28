@@ -1,0 +1,63 @@
+A list of general functions to copy, paste and use, either to make the code more similar to the normal toolkit or because I'm lazy.
+
+They are not the best, but they have helped me to make some code.
+=====================
+
+function bitchange(logic) => (prev(logic) < logic)
+
+function Change_to_cero(logic) => (prev(logic) > 0 && logic == 0)
+
+function DeltaE(address, value) {return (prev(address) == value)} // Equal
+function DeltaNE(address, value) {return (prev(address) != value)} // Not Equal
+function DeltaB(address, value) {return (prev(address) > value)} // Bigger
+function DeltaS(address, value) {return (prev(address) < value)} // Smaller
+function DeltaBE(address, value) {return (prev(address) >= value)} // Bigger or Equal
+function DeltaSE(address, value) {return (prev(address) <= value)} // Smaller or Equal
+
+// Priors
+function PriorE(address, value) {return (prior(address) == value)} // Equal
+function PriorNE(address, value) {return (prior(address) != value)} // Not Equal
+function PriorB(address, value) {return (prior(address) > value)} // Bigger
+function PriorS(address, value) {return (prior(address) < value)} // Smaller
+function PriorBE(address, value) {return (prior(address) >= value)} // Bigger or Equal
+function PriorSE(address, value) {return (prior(address) <= value)} // Smaller or Equal
+
+// ResetIf
+function ResetIf(logic) {return (never(logic))}
+
+// PauseIf
+function PauseIf(logic) {return (unless(logic))}
+function PauseIfUntil(logic) {disable_when(logic, until=always_false())} // Pause without a reset flag
+function PauseIfUntil(logic, Until) {disable_when(logic, until=Until)} // Pause with a reset flag
+
+// AddSource chains
+// Receive an array of size(address) elements and create an AddSource chain that have to be equal to the size of the array
+// Used for bitflags
+function AddSourceChain(array) {
+    return_logic = array[0]
+    for index in range(1, length(array)-1) {
+        return_logic = return_logic + array[index]
+    }
+    
+    return (measured(return_logic == length(array), when=always_true(), format="raw"))
+}
+
+// Receive an array of size(address) elements and create an AddSource Delta chain that have to be equal to the size of the array minus 1
+// Used for bitflags
+function AddSourceDeltaChain(array) {
+    return_logic = prev(array[0])
+    for index in range(1, length(array)-1) {
+        return_logic = return_logic + prev(array[index])
+    }
+    
+    return (return_logic == length(array)-1)
+}
+
+// Use as a not in for conditionals, value is the value to compare and array is the array with elements that you want to exclude
+function not_in(element, array){
+    i = true
+    for x in array{
+        i = i && element != x
+    }
+    return i
+}
