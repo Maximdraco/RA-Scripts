@@ -1,0 +1,156 @@
+import { AchievementSet, define as $ } from '@cruncheevos/core'
+// Al this functions are made for the format I use for my code notes
+
+// Full info in https://docs.retroachievements.org/developer-docs/achievement-development-overview.html#flags
+// All non numeric values have to be strings
+// ----------------------------------------------------
+// flag
+// '' (none)
+// PauseIf      | Pause (freeze) the achievement while this conditions is true, only on the alt group
+// ResetIf      | Clean hits globally, the achievement doesn't trigger while this is true, they can't reset each other
+// ResetNextIf  | Same as ResetIf, but if is true, only reset the next line or chain (AndNext and OrNext)
+// AddHits      | Add the hits of this condition to the hits of the next line
+// SubHits      | AddHits, but it substract the hits
+// AndNext      | This and the next condition have to be true at the same time, form logic chains
+// OrNext       | This or the next condition have to be true, form logic chains
+// Measured     | For tracking conditions, show value/total
+// Measured%    | Measured but %
+// MeasuredIf   | Must be true for the Measured to be active, if it isn't used, the Measured will always be active
+// Trigger      | If this are the last conditions or chains needing to be true, the icon will appear on screen
+// AddSource    | Adds the value of the address to the next one
+// SubSource    | Substract the value of the address to the next one, be carefull with negative values
+// AddAddress   | Adds the value of the address with the flag to the next address, used for pointers
+//                AddAddress Pointer
+//                           Offset...
+// Remember     | Saves it's value in Recall (Type) to use later, one per group
+// -----------------------------------------------------
+// type
+// '' (none)
+//
+// Addresses:
+// Mem    | A memory address
+// Delta  | The value of the address in the previous frame
+// Prior  | Checks for the previous value of the address after changing
+//          | frame | value | delta | prior |
+//          | ----- | ----- | ----- | ----- |
+//          |   1   |  10   |   0   |   0   |
+//          |   1   |  10   |  10   |   0   |
+//          |   1   |  20   |  10   |  10   |
+//          |   1   |  20   |  20   |  10   |
+//          | ----- | ----- | ----- | ----- |
+// BCD    | Interpret the hex value of the address and decimal 0x10 = 10, normally 0x10 = 16
+// Invert | Invert values of each bit of the address
+//
+// Values:
+// Value  | A simple integer, can be positive, negative or 0 (size 32 bits)
+// Float  | Like Value, but is a float instead of an integer
+// Recall | Recover the values stored with Remember (flag), doesn't have size or address or value
+// -----------------------------------------------------
+// size
+// '' (none)
+// Bit0 - Bit7 | Value of the specific bit of the address
+// Lower4      | Bits 0-3
+// Upper4      | Bits 4-7
+//
+// Normal sizes (LI): (12 34 56 78)
+// 8bit
+// 16bit
+// 24bit
+// 32bit
+// Double32
+// Float       | The address stores a float value
+//
+// BE:         |  The bytes are in reverse order (78 56 34 12)
+// 16bitBE
+// 24bitBE
+// 32bitBE
+// Double32BE
+// FloatBE     | float and BE
+//
+// BitCount    | Count the value of the bytes of the address
+//
+// MBF32 | Microsoft Binary Format
+// MBF32LE | The bytes are in reverse order
+// -----------------------------------------------------
+// memval | A numerical value or a memory address, specify with Type
+// -----------------------------------------------------
+// cmp
+// '' (none)
+// =  | Equal
+// != | Not equal
+// <
+// <=
+// >
+// >=
+// +  | Plus
+// -  | Minux
+// *  | Multiplication
+// /  | Division
+// %  | Modulus (division but returns the remainder)
+// &  | Bitwise-mask use another value to preserve bits, the rest will be considered always as 0
+// ^  | Bitwise-XOR (the bit will be 1 if both size have different values in that bit, otherwise it will be 0)
+// -----------------------------------------------------
+// hit | Positive integers
+
+// General functions
+export function is_dictionary(element){
+    return (typeof element === 'object' && element !== null && !Array.isArray(element))
+}
+
+// Logic related functions
+
+// [flag, type1, size1, memval1, cmp, type2, size2, memval2, hit]
+
+// Returns a small list with data from a value to make
+// An achievement logic line
+export function value(value){
+    return (["Value", "", value])
+}
+
+// Returns a small list with data from an address to make
+// an achievement logic line
+export function mem(code_note){
+    var address = 0
+    if ("address" in code_note){
+        address = code_note.address
+    } else if ("offset" in code_note){
+        address = code_note.offset
+    }
+    return([code_note.type, code_note.size, address])
+}
+
+// Returns a line of achievement logic
+// It spects the results from the mem() and value()
+export function logic(flag, memval1, cmp, memval2, hit){
+    var type1 = memval1[0]
+    var size1 = memval1[1]
+    var lmem = memval1[2]
+    var type2 = memval2[0]
+    var size2 = memval2[1]
+    var rmem = memval2[2]
+    return([flag, type1, size1, lmem, cmp, type2, size2, rmem, hit])
+}
+
+// A function that return an achievement logic line for a bitflag change
+// cmp is the comparition
+export function delta(flag, memval1, cmp, memval2, hit){
+    var l = logic(flag, memval1, cmp, memval2, hit)
+    l[5] = "Delta"
+    return(l)
+}
+
+export function prior(flag, memval1, cmp, memval2, hit){
+    var l = logic(flag, memval1, cmp, memval2, hit)
+    l[5] = "Prior"
+    return(l)
+}
+
+export function simple_pointer(pointer, offset_logic){
+    var type = pointer.type
+    var size = pointer.size
+    var address = pointer.address
+    return $(
+        ["AddAddress", type, size, address],
+        offset_logic
+    )
+}

@@ -1,4 +1,8 @@
 import { AchievementSet, define as $ } from '@cruncheevos/core'
+import * as codeNotes from "./code notes.js"
+// Maximdraco's functions'
+import * as mdf from "../../custom functions.js"
+
 const set = new AchievementSet({
   gameId: 20222,
   title:
@@ -9,149 +13,145 @@ const set = new AchievementSet({
 // Variables //
 //////////////
 
-// The hack + a patch that only change the hash
-const subset_patch = {
-  Map_bank: 0x3a2e4,
-
-  Sub_bank: 0x3a2e5,
-
-  Tower: {
-    Map_bank: 26,
-    Sub_bank: 8,
-    Silver: {offset: 0x9388, bit: "Bit4"},
-    Golden: {offset: 0x9388, bit: "Bit5"}
-  },
-
-  Dome: {
-    Map_bank: 26,
-    Sub_bank: 21,
-    Silver: {offset: 0x9388, bit: "Bit6"},
-    Golden: {offset: 0x9388, bit: "Bit7"}
-  },
-
-  Palace: {
-    Map_bank: 26,
-    Sub_bank: 24,
-    Silver: {offset: 0x9389, bit: "Bit0"},
-    Golden: {offset: 0x9389, bit: "Bit1"}
-  },
-
-  Arena: {
-    Map_bank: 26,
-    Sub_bank: 30,
-    Silver: {offset: 0x9389, bit: "Bit2"},
-    Golden: {offset: 0x9389, bit: "Bit3"}
-  },
-
-  Factory: {
-    Map_bank: 26,
-    Sub_bank: 33,
-    Silver: {offset: 0x9389, bit: "Bit4"},
-    Golden: {offset: 0x9389, bit: "Bit5"}
-  },
-
-  Pike: {
-    Map_bank: 26,
-    Sub_bank: 37,
-    Silver: {offset: 0x9389, bit: "Bit6"},
-    Golden: {offset: 0x9389, bit: "Bit7"}
-  },
-
-  Pyramid: {
-    Map_bank: 26,
-    Sub_bank: 27,
-    Silver: {offset: 0x938a, bit: "Bit0"},
-    Golden: {offset: 0x938a, bit: "Bit1"}
-  },
-
-  main_pointer: 0x5d8c, // 24 bits
-
-  Shield: {
-    Map_bank: 26,
-    Sub_bank: 46,
-    Silver: {offset: 0x928d, bit: "Bit5"},
-    Golden: {offset: 0x928d, bit: "Bit6"}
-  },
-
-  no_ingame: 0x3f32f, // 00 during the intro and select save menu
-}
-
-const versions = [subset_patch]
-
 const facilities = ["Tower", "Dome", "Palace",
                     "Arena", "Factory", "Pike",
                     "Pyramid", "Shield"]
 
 const badge_types = ["Silver", "Golden"]
 
+// Name of relevant areas in "code notes.js"
+const area2 = [
+  "symbol_battle_tower",
+  "symbol_battle_dome",
+  "symbol_battle_palace",
+  "symbol_battle_arena",
+  "symbol_battle_factory",
+  "symbol_battle_pike",
+  "symbol_battle_pyramid",
+  "battle_frontier_shield"
+]
+
+// Name of bitflags in "code notes.js"
+const bf = [
+  // Silver
+  [
+    "battle_frontier_silver_symbol_tower",
+    "battle_frontier_silver_symbol_dome",
+    "battle_frontier_silver_symbol_palace",
+    "battle_frontier_silver_symbol_arena",
+    "battle_frontier_silver_symbol_factory",
+    "battle_frontier_silver_symbol_pike",
+    "battle_frontier_silver_symbol_pyramid",
+    "battle_frontier_silver_shield"
+  ],
+  // Golden
+  [
+    "battle_frontier_golden_symbol_tower",
+    "battle_frontier_golden_symbol_dome",
+    "battle_frontier_golden_symbol_palace",
+    "battle_frontier_golden_symbol_arena",
+    "battle_frontier_golden_symbol_factory",
+    "battle_frontier_golden_symbol_pike",
+    "battle_frontier_golden_symbol_pyramid",
+    "battle_frontier_golden_shield"
+  ]
+]
+
 ////////////////
 // Functions //
 //////////////
 
-function in_game_check(){
-  return (
-    ['', 'Delta', '8bit', versions[0].no_ingame, '!=', 'Value', '', 0]
-  )
+// [flag, type1, size1, memval1, cmp, type2, size2, memval2, hit]
+
+function achievement_logic(area1, area2, pointer, bitflag){
+  // In case there is only 1 version
+  var alt_groups
+  if (codeNotes.list_of_versions.length == 1){
+    alt_groups = {
+      core:[
+          codeNotes.in_game_check(0),
+          codeNotes.pointer_check(0, pointer),
+          codeNotes.event_flag_triggering(0, pointer, bitflag)
+        ]
+    }
+    return alt_groups
+  }
+  // In case there are multiple versions
+  else{
+    alt_groups = {core: "1=1"}
+    for (let i = 0; i < codeNotes.list_of_versions.length; i++){
+      var altG = "alt"+ (i+1)
+      alt_groups[altG] = [
+        codeNotes.in_game_check(i),
+        codeNotes.pointer_check(i, pointer),
+        codeNotes.event_flag_triggering(i, pointer, bitflag)
+      ]
+    }
+    return(alt_groups)
+  }
 }
 
-function pointer_bitflag(badge, facility){
-  var v = versions[0]
-  var f = v[facility]
-  var b = f[badge]
-
-  return($(
-    ['AddAddress', 'Delta', '24bit', v.main_pointer],
-    ['', 'Delta', b.bit, b.offset, '=', 'Value', '', 0],
-    ['AddAddress', 'Mem', '24bit', v.main_pointer],
-    ['', 'Mem', b.bit, b.offset, '=', 'Value', '', 1]
-  ))
+function points(bt){
+  if (bt == "Silver"){
+    return 50
+  }
+  else{
+    return 100
+  }
 }
 
+function achievement_titles(bt, f, j){
+  var ac = [
+    "Symbol of the "+bt+" "+f,
+    bt+" "+f,
+    "Full "+bt+" "+f,
+    "Warrior of the "+bt+" "+f,
+    f+" of "+bt,
+    "Queen of the "+bt+" "+f,
+    bt+" Pharaoh\'s "+f,
+    bt+" Scott"
+  ]
+  if (bt == "Golden" && f == "Factory"){
+    return ("Factory of Gold")
+  } else {
+    return (ac[j])
+  }
+}
+
+function achievement_description(bt, f, j){
+  var ds = "Get the " + bt + " Symbol of the Battle " + f + "."
+
+  if (f == "Shield"){
+    return ("Get the " + bt + " Shield from Scott in the Battle Frontier.")
+  } else {
+    return ds
+  }
+}
 ////////////////
 // Main code //
 //////////////
 
+// Loop per badge type
 for (let i = 0; i < badge_types.length; i++){
-  var ver = versions[0]
+  // Badge type
   var bt = badge_types[i]
-  var points = 0
+  var point = points(bt)
 
-  if (i == 0){points = 50}
-  else {points = 100}
-
+  // Loop per facility
   for (let j = 0; j < facilities.length; j++){
     var f = facilities[j]
 
-    const achievement_titles = ["Emblem of the "+bt+" "+f,
-                                bt+" "+f,
-                                "Full "+bt+" "+f,
-                                "Warrior of the "+bt+" "+f,
-                                f+" of "+bt,
-                                "Queen of the "+bt+" "+f,
-                                bt+" Pharaoh\'s "+f,
-                                bt+" Scott"
-    ]
+    // Titles and descriptions
+    var ac = achievement_titles(bt, f, j)
+    var ds = achievement_description(bt, f, j)
 
-    var ac = achievement_titles[j]
-    var ds = "Get the " + bt + " Emblem of the Battle " + f + "."
-
-    if (f == "Factory"){
-      if (bt == "Golden"){
-        ac = "Factory of Gold"
-      }
-    } else if (f == "Shield"){
-      ds = "Get the " + bt + " Shield from Scott in the Battle Frontier."
-    }
-
+    // Achievements
     set.addAchievement({
       title: ac,
       description: ds,
-      points: points,
-      conditions: $(
-        ['', 'Mem', '8bit', ver.Map_bank, '=', 'Value', '', ver[f].Map_bank],
-        ['', 'Mem', '8bit', ver.Sub_bank, '=', 'Value', '', ver[f].Sub_bank],
-        pointer_bitflag(bt, f),
-        in_game_check()
+      points: point,
+      conditions: (
+        achievement_logic("battle_frontier", area2[j], "main_pointer", bf[i][j])
       )
     })
   }
