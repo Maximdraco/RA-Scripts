@@ -1,17 +1,18 @@
 import { AchievementSet, define as $ } from '@cruncheevos/core'
+import * as codeNotes from "./code notes.js"
+// Maximdraco's functions'
+import * as mdf from "../../custom functions.js"
+
 const set = new AchievementSet({
   gameId: 17757,
   title: '~Hack~ Pokémon Emerald Version: Party Randomizer',
 })
 
-set.addAchievement({
-  title: 'Warning: Unknown Emulator',
-  description: 'Hardcore unlocks cannot be earned using this emulator.',
-  points: 0,
-  conditions: '1=1.300.',
-  badge: '00000',
-  id: 101000001,
-})
+// Functions
+
+
+
+// Achievemenets
 
 set.addAchievement({
   title: 'Is This Even Randomized?',
@@ -793,6 +794,45 @@ set.addAchievement({
   badge: '188881',
   id: 168035,
 })
+
+functions pokedex(i){
+  var version = codeNotes.list_of_versions[i]
+  var start_range = version.pokedex_pointer.offsets.dex_1_8.offset
+  var end_range = version.pokedex_pointer.offsets.dex_385.offset - 0x1
+  var conditions = []
+  // Delta
+  for (let o = start_range; o <= end_range; o = o + 0x1) {
+    let logic = ["AddSource", "Delta", "BitCount", o]
+    let p = mdf.simple_pointer(version.pokedex_pointer, logic)
+    conditions.push(p)
+  }
+  var logic = ["AddSource", "Delta", version.pokedex_pointer.offsets.dex_385.size, version.pokedex_pointer.offsets.dex_385.offset]
+  var p = mdf.simple_pointer(version.pokedex_pointer, logic)
+  conditions.push(p)
+
+  var logic = ["AddSource", "Delta", version.pokedex_pointer.offsets.dex_386.size, version.pokedex_pointer.offsets.dex_386.offset]
+  var p = mdf.simple_pointer(version.pokedex_pointer, logic)
+  conditions.push(p)
+  // Mem
+  for (let o = start_range; o <= end_range; o = o + 0x1) {
+    let logic = ["AddSource", "Mem", "BitCount", o]
+    let p = mdf.simple_pointer(version.pokedex_pointer, logic)
+    conditions.push(p)
+  }
+  var logic = ["AddSource", "Mem", version.pokedex_pointer.offsets.dex_385.size, version.pokedex_pointer.offsets.dex_385.offset]
+  var p = mdf.simple_pointer(version.pokedex_pointer, logic)
+  conditions.push(p)
+
+  var logic = ["AddSource", "Mem", version.pokedex_pointer.offsets.dex_386.size, version.pokedex_pointer.offsets.dex_386.offset]
+  var p = mdf.simple_pointer(version.pokedex_pointer, logic)
+  conditions.push(p)
+
+  return conditions
+}
+
+function pokedex_achievement(){
+
+}
 
 set.addAchievement({
   title: `Gotta Randomize 'em All!`,

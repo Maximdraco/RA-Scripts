@@ -10,9 +10,9 @@ import * as mdf from "../../custom functions.js"
 // i is the position in the array of version of the particular version of the game
 export function in_game_check(i){
     var version = list_of_versions[i]
-    var timer_state = version.timer_state
-    var mem = mdf.mem(timer_state)
-    var val = mdf.value(timer_state.values.stopped)
+    var timer = version.timer_state
+    var mem = mdf.mem(timer)
+    var val = mdf.value(timer.values.stopped)
     // Logic line
     return $(mdf.logic("", mem, "!=", val, 0))
 }
@@ -127,6 +127,11 @@ export const v_original = {
         type: "Mem",
         offsets: {
             // Bitflags
+            first_npc_route_101_visible: {
+                offset: 0x92eb,
+                size: "Bit7",
+                type: "Mem"
+            },
             battle_frontier_silver_symbol_tower: {
                 offset: 0x9388,
                 size: "Bit4",
@@ -205,6 +210,29 @@ export const v_original = {
             battle_frontier_golden_shield: {
                 offset: 0x928d,
                 size: "Bit6",
+                type: "Mem"
+            }
+        }
+    },
+    pokedex_pointer:{
+        address: 0x5d90,
+        size: "24bit",
+        type: "Mem",
+        // Offset: 8028 - 8058 (full Pokedex)
+        offsets: {
+            dex_1_8: {
+                offset: 0x8028,
+                size: "BitCount",
+                type: "Mem"
+            },
+            dex_385:{
+                offset: 0x8058,
+                size: "Bit0",
+                type: "Mem"
+            },
+            dex_386:{
+                offset: 0x8058,
+                size: "Bit1",
                 type: "Mem"
             }
         }

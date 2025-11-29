@@ -63,34 +63,6 @@ const bf = [
 
 // [flag, type1, size1, memval1, cmp, type2, size2, memval2, hit]
 
-function achievement_logic(area1, area2, pointer, bitflag){
-  // In case there is only 1 version
-  var alt_groups
-  if (codeNotes.list_of_versions.length == 1){
-    alt_groups = {
-      core:[
-          codeNotes.in_game_check(0),
-          codeNotes.pointer_check(0, pointer),
-          codeNotes.event_flag_triggering(0, pointer, bitflag)
-        ]
-    }
-    return alt_groups
-  }
-  // In case there are multiple versions
-  else{
-    alt_groups = {core: "1=1"}
-    for (let i = 0; i < codeNotes.list_of_versions.length; i++){
-      var altG = "alt"+ (i+1)
-      alt_groups[altG] = [
-        codeNotes.in_game_check(i),
-        codeNotes.pointer_check(i, pointer),
-        codeNotes.event_flag_triggering(i, pointer, bitflag)
-      ]
-    }
-    return(alt_groups)
-  }
-}
-
 function points(bt){
   if (bt == "Silver"){
     return 50
@@ -151,7 +123,11 @@ for (let i = 0; i < badge_types.length; i++){
       description: ds,
       points: point,
       conditions: (
-        achievement_logic("battle_frontier", area2[j], "main_pointer", bf[i][j])
+        mdf.simple_achievement_logic([
+          { fn: codeNotes.in_game_check, args: [] },
+          { fn: codeNotes.pointer_check, args: ["main_pointer"] },
+          { fn: codeNotes.event_flag_triggering, args: ["main_pointer", bf[i][j]] }
+        ], codeNotes.list_of_versions)
       )
     })
   }

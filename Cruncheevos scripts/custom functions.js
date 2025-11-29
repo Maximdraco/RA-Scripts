@@ -154,3 +154,35 @@ export function simple_pointer(pointer, offset_logic){
         offset_logic
     )
 }
+
+// Clean a bit more but it works
+// functions is a list with dictionaries with the next estructure:
+// fn: The name of the function we will call
+// args: A list of arguments for the functions
+// versions is the list of versions of the game
+export function simple_achievement_logic(functions, versions) {
+    var alt_groups = {}
+    // How many versions are in the list
+    var numVersions = versions.length
+
+    // If there is only 1 version
+    if (numVersions == 1) {
+        // map() is calling each function with the index of a version in
+        // the list of versions (used by all functions), and the other
+        // arguments passed in the functions variable
+        alt_groups.core = functions.map(f => f.fn(0, ...(f.args || [])))
+
+    } else {
+
+        alt_groups.core = "1=1"
+        for (let i = 0; i < numVersions; i++) {
+            var altG = "alt" + (i + 1)
+            // map() is calling each function with the index of a version in
+            // the list of versions (used by all functions), and the other
+            // arguments passed in the functions variable
+            alt_groups[altG] = functions.map(f => f.fn(i, ...(f.args || [])))
+        }
+    }
+
+    return alt_groups
+}
