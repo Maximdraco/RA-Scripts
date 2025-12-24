@@ -91,6 +91,7 @@ import { AchievementSet, define as $ } from '@cruncheevos/core'
 // ^  | Bitwise-XOR (the bit will be 1 if both size have different values in that bit, otherwise it will be 0)
 // -----------------------------------------------------
 // hit | Positive integers
+// console.log()
 
 // General functions
 export function is_dictionary(element){
@@ -101,48 +102,21 @@ export function is_dictionary(element){
 
 // [flag, type1, size1, memval1, cmp, type2, size2, memval2, hit]
 
-// Returns a small list with data from a value to make
-// An achievement logic line
-export function value(value){
-    return (["Value", "", value])
-}
+// Function to convert multiple conditions (in list form) into
+// achievement logic
+// array = Array with achievement logic in list form
+// logic = Either an achievement logic line in list form or
+//         achievement logic.
+//         This will be put first in the final achievement logic.
+export function assembler(array, logic=undefined){
+    var x
+    if (logic == undefined){x = $(array[0])}
+    else {x = $(logic, array[0])}
 
-// Returns a small list with data from an address to make
-// an achievement logic line
-export function mem(code_note){
-    var address = 0
-    if ("address" in code_note){
-        address = code_note.address
-    } else if ("offset" in code_note){
-        address = code_note.offset
+    if (array.length > 1){
+        for (var i = 1; i < array.length; i++){x = $(x, array[i])}
     }
-    return([code_note.type, code_note.size, address])
-}
-
-// Returns a line of achievement logic
-// It spects the results from the mem() and value()
-export function logic(flag, memval1, cmp, memval2, hit){
-    var type1 = memval1[0]
-    var size1 = memval1[1]
-    var lmem = memval1[2]
-    var type2 = memval2[0]
-    var size2 = memval2[1]
-    var rmem = memval2[2]
-    return([flag, type1, size1, lmem, cmp, type2, size2, rmem, hit])
-}
-
-// A function that return an achievement logic line for a bitflag change
-// cmp is the comparition
-export function delta(flag, memval1, cmp, memval2, hit){
-    var l = logic(flag, memval1, cmp, memval2, hit)
-    l[5] = "Delta"
-    return(l)
-}
-
-export function prior(flag, memval1, cmp, memval2, hit){
-    var l = logic(flag, memval1, cmp, memval2, hit)
-    l[5] = "Prior"
-    return(l)
+    return x
 }
 
 export function simple_pointer(pointer, offset_logic){
