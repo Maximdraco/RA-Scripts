@@ -8,9 +8,322 @@ const set = new AchievementSet({
   title: '~Hack~ Pokémon Emerald Version: Party Randomizer',
 })
 
+// Variables
+
+var gym_achievement_titles = [
+  "Roxanne Rocked",
+  "Brawly the Brawler",
+  "Electric Master",
+  "Candente!",
+  "Just Normal",
+  "Master of the Skies",
+  "Two Minds Are Better Than One",
+  "Ice Juan"
+]
+
+var gym_leader_names = [
+  "Roxanne",
+  "Brawly",
+  "Wattson",
+  "Flannery",
+  "Norman",
+  "Winona",
+  "Tate and Liza",
+  "Juan"
+]
+
+var gyms_city = [
+  "Rustboro City",
+  "Dewford Town",
+  "Mauville City",
+  "Lavaridge Town",
+  "Petalburg City",
+  "Fortree City",
+  "Mossdeep City",
+  "Sootopolis City"
+]
+
+var gym_challenge_achievement_titles = [
+  "Not Quite Like Brock",
+  "King of Fighters",
+  "I\'m Not a Doctor - I\'m an Electrician!",
+  "Super Candente!",
+  "Hyper Normalization",
+  "Renewal Wings",
+  "Our IQ Is Over 9000!",
+  "Ice King Juan"
+]
+
+var gym_level_caps = [15, 19, 24, 29, 31, 33, 42, 46]
+var gym_leader_pronoums = ["her", "him", "him", "her", "him", "her", "them", "him"]
+
+var gym_maps = [
+  "rustboro_gym",
+"denford_gym",
+"mauville_gym",
+"lavaridge_gym",
+"petalburg_gym",
+"fortree_gym",
+"mossdeep_gym",
+"sootopolis_gym"
+]
+
 // Functions
 
+// I'm not using this at the moment
+// m is the movement type (as string)
+function surf_dive(i, m){
+  var version = codeNotes.list_of_versions[i]
+  var movement = version.player_movement_type
+  return $(["AndNext", movement.type, movement.bits[m], movement.address, "=", "Value", "", 1, 0])
+}
 
+function pokedex(i){
+  var version = codeNotes.list_of_versions[i]
+  var pokedex = version.pointer_two
+  // Ranges for the loops
+  var start = pokedex.offsets.dex_1_8.offset
+  var end = pokedex.offsets.dex_385.offset - 1
+  // Declaration of some variables
+  var logic // Used for each achievement logic line
+  var conditions
+  // Arrays with the delta and mem parts of the logic chains
+  var delta = []
+  var mem = []
+
+  for (let o = start; o <= end; o = o + 1) {
+    logic = ["AddSource", "Delta", "BitCount", o]
+    delta.push(mdf.simple_pointer(pokedex, logic))
+    logic[1] = "Mem"
+    mem.push(mdf.simple_pointer(pokedex, logic))
+  }
+
+  // Last bitflags
+  logic = ["AddSource", "Delta", pokedex.offsets.dex_385.size, pokedex.offsets.dex_385.offset]
+  delta.push(mdf.simple_pointer(pokedex, logic))
+  logic[1] = "Mem"
+  mem.push(mdf.simple_pointer(pokedex, logic))
+
+  logic = ["", "Delta", pokedex.offsets.dex_386.size, pokedex.offsets.dex_386.offset, "<=", "Value", "", 385, 0]
+  delta.push(mdf.simple_pointer(pokedex, logic))
+  logic[1] = "Mem"
+  logic[4] = "="
+  logic[7] = 386
+  mem.push(mdf.simple_pointer(pokedex, logic))
+
+  conditions = mdf.assembler(delta.concat(mem))
+
+  return (conditions)
+}
+
+function set_mode(i){
+  var version = codeNotes.list_of_versions[i]
+  var pointer = version.main_pointer
+  var set_mode = pointer.offsets.settings_set_mode
+  var type = set_mode.type
+  var size = set_mode.size
+  var offset = set_mode.offset
+  var logic = ["AndNext", type, size, offset, "=", "Value", "", 1, 0]
+
+  return mdf.simple_pointer(pointer, logic)
+}
+
+function level_caps(i, level){
+  var version = codeNotes.list_of_versions[i]
+  var team = version.team_data
+  var mon1 = team.mon1.level
+  var mon2 = team.mon2.level
+  var mon3 = team.mon3.level
+  var mon4 = team.mon4.level
+  var mon5 = team.mon5.level
+  var mon6 = team.mon6.level
+
+  var logic = [
+    ["AndNext", mon1.type, mon1.size, mon1.address, "<=", "Value", "", level, 1],
+    ["AndNext", mon2.type, mon2.size, mon2.address, "<=", "Value", "", level, 1],
+    ["AndNext", mon3.type, mon3.size, mon3.address, "<=", "Value", "", level, 1],
+    ["AndNext", mon4.type, mon4.size, mon4.address, "<=", "Value", "", level, 1],
+    ["AndNext", mon5.type, mon5.size, mon5.address, "<=", "Value", "", level, 1],
+    ["AndNext", mon6.type, mon6.size, mon6.address, "<=", "Value", "", level, 1]
+  ]
+
+  return mdf.assembler(logic)
+}
+
+function in_gym_leader_battle(i){
+  var version = codeNotes.list_of_versions[i]
+  var music = version.music
+  var address = music.address
+  var size = music.size
+  var type = music.type
+  var value = music.values.gym_leader
+
+  return $(
+    ["AndNext", type, size, address, "=", "Value", "", value, 1]
+  )
+}
+
+function backpack_check(i, mb, sb){
+  var version = codeNotes.list_of_versions[i]
+  var logic = []
+  // Map Bank
+  var code_note = version.maps.map_bank
+  var address = code_note.address
+  var size = code_note.size
+  var type = code_note.type
+  var map = version.maps.areas[mb]
+  var value = map.map_bank
+  logic.push(
+    ["OrNext", type, size, address, "!=", "Value", "", value, 0]
+  )
+  // Sub Bank
+  var code_note = version.maps.sub_bank
+  var address = code_note.address
+  var size = code_note.size
+  var type = code_note.type
+  var value = map.sub_map[sb]
+  logic.push(
+    ["ResetNextIf", type, size, address, "!=", "Value", "", value, 0]
+  )
+  // Music
+  var code_note = version.music
+  var address = code_note.address
+  var size = code_note.size
+  var type = code_note.type
+  var value = code_note.values.gym_leader
+  logic.push(
+    ["AndNext", type, size, address, "=", "Value", "", value, 0]
+  )
+  // Bag open in battle
+  var code_note = version.bag_open_in_battle
+  var address = code_note.address
+  var size = code_note.size
+  var type = code_note.type
+  var value = 2
+  logic.push(
+    ["PauseIf", type, size, address, "=", "Value", "", value, 1]
+  )
+
+  return mdf.assembler(logic)
+}
+
+function map_check(i, mb, sb){
+  var version = codeNotes.list_of_versions[i]
+  var logic = []
+  // Map Bank
+  var code_note = version.maps.map_bank
+  var address = code_note.address
+  var size = code_note.size
+  var type = code_note.type
+  var map = version.maps.areas[mb]
+  var value = map.map_bank
+  logic.push(
+    ["OrNext", type, size, address, "!=", "Value", "", value, 0]
+  )
+  // Sub Bank
+  var code_note = version.maps.sub_bank
+  var address = code_note.address
+  var size = code_note.size
+  var type = code_note.type
+  var value = map.sub_map[sb]
+  logic.push(
+    ["ResetIf", type, size, address, "!=", "Value", "", value, 0]
+  )
+  return mdf.assembler(logic)
+}
+
+
+function in_map_bank(i, mb){
+  var version = codeNotes.list_of_versions[i]
+  // Map Bank
+  var code_note = version.maps.map_bank
+  var address = code_note.address
+  var size = code_note.size
+  var type = code_note.type
+  var map = version.maps.areas[mb]
+  var value = map.map_bank
+  return $(
+    ["AndNext", type, size, address, "=", "Value", "", value, 0]
+  )
+}
+
+function league_win(i){
+  var version = codeNotes.list_of_versions[i]
+  var battle_state = version.battle_data.battle_state
+  var type = battle_state.type
+  var size = battle_state.size
+  var address = battle_state.address
+  var value = battle_state.values.win
+  return $(
+    ["AndNext", type, size, address, ">", "Delta", size, address, 0],
+    ["", type, size, address, "=", "Value", "", value, 5]
+  )
+}
+
+function lose(i){
+  var version = codeNotes.list_of_versions[i]
+  var battle_state = version.battle_data.battle_state
+  var type = battle_state.type
+  var size = battle_state.size
+  var address = battle_state.address
+  var value = battle_state.values.lose
+
+  return $(
+    ["ResetIf", type, size, address, "=", "Value", "", value, 0]
+  )
+}
+
+function not_in_map_bank(i, mb){
+  var version = codeNotes.list_of_versions[i]
+  // Map Bank
+  var code_note = version.maps.map_bank
+  var address = code_note.address
+  var size = code_note.size
+  var type = code_note.type
+  var map = version.maps.areas[mb]
+  var value = map.map_bank
+  return $(
+    ["ResetIf", type, size, address, "!=", "Value", "", value, 0]
+  )
+}
+
+function backpack_check_leage(i, mb){
+  var version = codeNotes.list_of_versions[i]
+  var logic = []
+  // Map Bank
+  var code_note = version.maps.map_bank
+  var address = code_note.address
+  var size = code_note.size
+  var type = code_note.type
+  var map = version.maps.areas[mb]
+  var value = map.map_bank
+  logic.push(
+    ["ResetNextIf", type, size, address, "!=", "Value", "", value, 0]
+  )
+  // Music
+  var code_note = version.music
+  var address = code_note.address
+  var size = code_note.size
+  var type = code_note.type
+  var value = code_note.values.elite_four
+  logic.push(
+    ["OrNext", type, size, address, "=", "Value", "", value, 0]
+  )
+  var value = code_note.values.champion
+  logic.push(
+    ["AndNext", type, size, address, "=", "Value", "", value, 0]
+  )
+  // Bag open in battle
+  var code_note = version.bag_open_in_battle
+  var address = code_note.address
+  var size = code_note.size
+  var type = code_note.type
+  var value = 2
+  logic.push(
+    ["PauseIf", type, size, address, "=", "Value", "", value, 1]
+  )
+  return mdf.assembler(logic)
+}
 
 // Achievemenets
 
@@ -20,685 +333,250 @@ set.addAchievement({
     'Save Professor Birch from the wild Zigzagoon with your starter!',
   points: 1,
   type: 'missable',
-  conditions: $(
-    ['AndNext', 'Mem', '8bit', 0x3f32f, '!=', 'Value', '', 0],
-    ['AndNext', 'Mem', '8bit', 0x3a2e4, '=', 'Value', '', 0],
-    ['AndNext', 'Mem', '8bit', 0x3a2e5, '=', 'Value', '', 16],
-    ['AndNext', 'Mem', '8bit', 0x2c4e9, '=', 'Value', '', 1],
-    ['AndNext', 'Mem', '8bit', 0xd63c, '=', 'Value', '', 1],
-    ['AndNext', 'Mem', '8bit', 0xf48, '=', 'Value', '', 0],
-    ['AndNext', 'Mem', '8bit', 0x2c33a, '>', 'Delta', '8bit', 0x2c33a],
-    ['', 'Mem', '8bit', 0x2c33a, '=', 'Value', '', 1],
-  ),
-  badge: '188832',
-  id: 159790,
+  conditions: (
+      mdf.simple_achievement_logic([
+        {fn: codeNotes.in_game_check, args: []},
+        {fn: codeNotes.pointer_check, args: ["main_pointer"]},
+        {fn: codeNotes.in_map, args: ["overworld", "route_101"]},
+        {fn: codeNotes.in_battle_check, args: []},
+        {fn: codeNotes.won_battle, args: []},
+        {fn: codeNotes.event_flag_on, args: ["main_pointer", "first_npc_route_101_visible"]}
+    ], codeNotes.list_of_versions)
+  )
 })
 
 set.addAchievement({
   title: `Wally, You Can't Catch a Fainted Pokemon!`,
-  description: `Watch Wally catch a fainted Pokemon; you can't repeat this event`,
+  description: `Watch Wally failing to catch a Ralts; you can't repeat this event`,
   points: 5,
   type: 'missable',
-  conditions: $(
-    ['AndNext', 'Mem', '8bit', 0x3f32c, '=', 'Value', '', 17],
-    ['AndNext', 'Mem', '8bit', 0xf48, '=', 'Value', '', 164, 1],
-    ['AndNext', 'Mem', '8bit', 0xf48, '=', 'Value', '', 218, 1],
-    ['AndNext', 'Mem', '8bit', 0x2c33a, '>', 'Delta', '8bit', 0x2c33a],
-    ['AndNext', 'Mem', '8bit', 0x2c33a, '!=', 'Value', '', 7],
-    ['AndNext', 'Mem', '8bit', 0x2c33a, '!=', 'Value', '', 4],
-    ['', 'Mem', '8bit', 0x2c33a, '!=', 'Value', '', 5],
-    ['AndNext', 'Mem', '8bit', 0xf48, '=', 'Value', '', 164, 1],
-    ['AndNext', 'Mem', '8bit', 0xf48, '=', 'Value', '', 218, 1],
-    ['AndNext', 'Mem', '8bit', 0x2c33a, '>', 'Delta', '8bit', 0x2c33a, 1],
-    ['ResetIf', 'Mem', '8bit', 0x2c33a, '=', 'Value', '', 7],
-    ['AndNext', 'Mem', '8bit', 0xf48, '=', 'Value', '', 164, 1],
-    ['AndNext', 'Mem', '8bit', 0xf48, '=', 'Value', '', 218, 1],
-    ['AndNext', 'Mem', '8bit', 0x2c33a, '>', 'Delta', '8bit', 0x2c33a, 1],
-    ['ResetIf', 'Mem', '8bit', 0x2c33a, '=', 'Value', '', 4],
-    ['AndNext', 'Mem', '8bit', 0xf48, '=', 'Value', '', 164, 1],
-    ['AndNext', 'Mem', '8bit', 0xf48, '=', 'Value', '', 218, 1],
-    ['AndNext', 'Mem', '8bit', 0x2c33a, '>', 'Delta', '8bit', 0x2c33a, 1],
-    ['ResetIf', 'Mem', '8bit', 0x2c33a, '=', 'Value', '', 5],
-  ),
-  badge: '188839',
-  id: 160093,
+  conditions: (
+    mdf.simple_achievement_logic([
+      {fn: codeNotes.in_game_check, args: []},
+      {fn: codeNotes.pointer_check, args: ["main_pointer"]},
+      {fn: codeNotes.in_battle_check, args: []},
+      {fn: codeNotes.not_catch, args: []},
+      {fn: codeNotes.event_flag_off, args: ["main_pointer", "hides_wally_petalburg"]}
+    ], codeNotes.list_of_versions)
+  )
 })
 
-set.addAchievement({
-  title: 'Roxanne Rocked',
-  description: 'Defeat Roxanne, the Gym Leader of Rustboro City',
-  points: 10,
-  type: 'progression',
-  conditions: $(
-    ['AndNext', 'Mem', '8bit', 0x3f32c, '=', 'Value', '', 10],
-    ['AndNext', 'Mem', '8bit', 0xf48, '=', 'Value', '', 221, 1],
-    ['AndNext', 'Mem', '8bit', 0x2c33a, '>', 'Delta', '8bit', 0x2c33a, 1],
-    ['AndNext', 'Mem', '8bit', 0x2c33a, '=', 'Value', '', 1, 1],
-    ['AddAddress', 'Mem', '24bit', 0x5d8c],
-    ['', 'Mem', 'Bit7', 0x937c, '>', 'Delta', 'Bit7', 0x937c],
-    ['AndNext', 'Mem', '8bit', 0xf48, '=', 'Value', '', 221, 1],
-    ['AndNext', 'Mem', '8bit', 0x2c33a, '>', 'Delta', '8bit', 0x2c33a],
-    ['ResetIf', 'Mem', '8bit', 0x2c33a, '=', 'Value', '', 2, 1],
-    ['ResetIf', 'Mem', '8bit', 0x3f32c, '!=', 'Value', '', 10],
-  ),
-  badge: '188830',
-  id: 167994,
-})
+// Loop to create the achievements for the gym leaders
+for (let i = 1; i<9; i++){
+  var title = gym_achievement_titles[i-1]
+  var description = "Defeat " + gym_leader_names[i-1] + ", the Gym Leader of " + gyms_city[i-1]
+  var badge = "gym_badge" + i
 
-set.addAchievement({
-  title: 'Not Quite Like Brock',
-  description:
-    'In Set Mode, defeat Roxanne in your first battle with her without using items in battle and without any Pokemon being higher than level 15 at the beginning of the battle',
-  points: 10,
-  type: 'missable',
-  conditions: {
-    core: $(
-      ['AddAddress', 'Mem', '24bit', 0x5d8c],
-      ['AndNext', 'Mem', 'Bit1', 0x7069, '=', 'Value', '', 1],
-      ['AndNext', 'Mem', '8bit', 0x3f32c, '=', 'Value', '', 10],
-      ['AndNext', 'Mem', '8bit', 0x2c540, '<=', 'Value', '', 15, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c5a4, '<=', 'Value', '', 15, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c608, '<=', 'Value', '', 15, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c66c, '<=', 'Value', '', 15, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c6d0, '<=', 'Value', '', 15, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c734, '<=', 'Value', '', 15, 1],
-      ['AndNext', 'Mem', '8bit', 0xf48, '=', 'Value', '', 221, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c33a, '>', 'Delta', '8bit', 0x2c33a, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c33a, '=', 'Value', '', 1, 1],
-      ['AddAddress', 'Mem', '24bit', 0x5d8c],
-      ['', 'Mem', 'Bit7', 0x937c, '>', 'Delta', 'Bit7', 0x937c],
-      ['AndNext', 'Mem', '8bit', 0x3f32c, '=', 'Value', '', 10],
-      ['AndNext', 'Mem', '8bit', 0xf48, '=', 'Value', '', 221],
-      ['PauseIf', 'Mem', '8bit', 0x16802, '=', 'Value', '', 2, 1],
-      ['AndNext', 'Mem', '8bit', 0xf48, '=', 'Value', '', 221, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c33a, '>', 'Delta', '8bit', 0x2c33a, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c33a, '=', 'Value', '', 2, 1],
-      ['ResetIf', 'Mem', '8bit', 0x3f32c, '!=', 'Value', '', 10],
-    ),
-    alt1: $(['', 'Mem', '8bit', 0xf48, '=', 'Mem', '8bit', 0xf48]),
-    alt2: $(['ResetIf', 'Mem', '8bit', 0x3f32c, '!=', 'Value', '', 10]),
-  },
-  badge: '188831',
-  id: 167995,
-})
+  set.addAchievement({
+    title: title,
+    description: description,
+    points: 10,
+    type: 'progression',
+    conditions: (
+      mdf.simple_achievement_logic([
+        {fn: codeNotes.in_game_check, args: []},
+        {fn: codeNotes.pointer_check, args: ["main_pointer"]},
+        {fn: codeNotes.event_flag_triggering, args: ["main_pointer", badge]}
+      ], codeNotes.list_of_versions)
+    )
+  })
+}
 
-set.addAchievement({
-  title: 'Brawly the Brawler',
-  description: 'Defeat Brawly, the Gym Leader of Dewford Town',
-  points: 10,
-  type: 'progression',
-  conditions: $(
-    ['AndNext', 'Mem', '8bit', 0x3f32c, '=', 'Value', '', 2],
-    ['AndNext', 'Mem', '8bit', 0xf48, '=', 'Value', '', 221, 1],
-    ['AndNext', 'Mem', '8bit', 0x2c33a, '>', 'Delta', '8bit', 0x2c33a, 1],
-    ['AndNext', 'Mem', '8bit', 0x2c33a, '=', 'Value', '', 1, 1],
-    ['AddAddress', 'Mem', '24bit', 0x5d8c],
-    ['', 'Mem', 'Bit0', 0x937d, '>', 'Delta', 'Bit0', 0x937d],
-    ['AndNext', 'Mem', '8bit', 0xf48, '=', 'Value', '', 221, 1],
-    ['AndNext', 'Mem', '8bit', 0x2c33a, '>', 'Delta', '8bit', 0x2c33a, 1],
-    ['AndNext', 'Mem', '8bit', 0x2c33a, '=', 'Value', '', 2, 1],
-    ['ResetIf', 'Mem', '8bit', 0x3f32c, '!=', 'Value', '', 2],
-    ['ResetIf', 'Mem', '8bit', 0x3f32c, '!=', 'Value', '', 2],
-  ),
-  badge: '188849',
-  id: 168000,
-})
+// Loop for the challenge achievements
+for (let i = 1; i<9; i++){
+  var title = gym_challenge_achievement_titles[i-1]
+  var description = "In Set Mode, defeat " + gym_leader_names[i-1] + " in your first battle with " + gym_leader_pronoums[i-1] + " without opening the backpack in battle and without any Pokemon being higher than level " + gym_level_caps[i-1] + " at the beginning of the battle"
+  var badge = "gym_badge" + i
 
-set.addAchievement({
-  title: 'King of Fighters',
-  description:
-    'In Set Mode, defeat Brawly in your first battle with him without using items in battle and without any Pokemon being higher than level 19 at the beginning of the battle',
-  points: 10,
-  type: 'missable',
-  conditions: {
-    core: $(
-      ['AddAddress', 'Mem', '24bit', 0x5d8c],
-      ['AndNext', 'Mem', 'Bit1', 0x7069, '=', 'Value', '', 1],
-      ['AndNext', 'Mem', '8bit', 0x3f32c, '=', 'Value', '', 2],
-      ['AndNext', 'Mem', '8bit', 0x2c540, '<=', 'Value', '', 19, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c5a4, '<=', 'Value', '', 19, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c608, '<=', 'Value', '', 19, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c66c, '<=', 'Value', '', 19, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c6d0, '<=', 'Value', '', 19, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c734, '<=', 'Value', '', 19, 1],
-      ['AndNext', 'Mem', '8bit', 0xf48, '=', 'Value', '', 221, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c33a, '>', 'Delta', '8bit', 0x2c33a, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c33a, '=', 'Value', '', 1, 1],
-      ['AddAddress', 'Mem', '24bit', 0x5d8c],
-      ['', 'Mem', 'Bit0', 0x937d, '>', 'Delta', 'Bit0', 0x937d],
-      ['AndNext', 'Mem', '8bit', 0x3f32c, '=', 'Value', '', 2],
-      ['AndNext', 'Mem', '8bit', 0xf48, '=', 'Value', '', 221],
-      ['PauseIf', 'Mem', '8bit', 0x16802, '=', 'Value', '', 2, 1],
-      ['AndNext', 'Mem', '8bit', 0xf48, '=', 'Value', '', 221, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c33a, '>', 'Delta', '8bit', 0x2c33a, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c33a, '=', 'Value', '', 2, 1],
-      ['ResetIf', 'Mem', '8bit', 0x3f32c, '!=', 'Value', '', 2],
-    ),
-    alt1: $(['', 'Mem', '8bit', 0xf48, '=', 'Mem', '8bit', 0xf48]),
-    alt2: $(['ResetIf', 'Mem', '8bit', 0x3f32c, '!=', 'Value', '', 2]),
-  },
-  badge: '188850',
-  id: 168001,
-})
-
-set.addAchievement({
-  title: 'Electric Master',
-  description: 'Defeat Wattson, the Gym Leader of Mauville City',
-  points: 10,
-  type: 'progression',
-  conditions: $(
-    ['AndNext', 'Mem', '8bit', 0x3f32c, '=', 'Value', '', 9],
-    ['AndNext', 'Mem', '8bit', 0xf48, '=', 'Value', '', 221, 1],
-    ['AndNext', 'Mem', '8bit', 0x2c33a, '>', 'Delta', '8bit', 0x2c33a, 1],
-    ['AndNext', 'Mem', '8bit', 0x2c33a, '=', 'Value', '', 1, 1],
-    ['AddAddress', 'Mem', '24bit', 0x5d8c],
-    ['', 'Mem', 'Bit1', 0x937d, '>', 'Delta', 'Bit1', 0x937d],
-    ['AndNext', 'Mem', '8bit', 0xf48, '=', 'Value', '', 221, 1],
-    ['AndNext', 'Mem', '8bit', 0x2c33a, '>', 'Delta', '8bit', 0x2c33a, 1],
-    ['ResetIf', 'Mem', '8bit', 0x2c33a, '=', 'Value', '', 2],
-    ['ResetIf', 'Mem', '8bit', 0x3f32c, '!=', 'Value', '', 9],
-  ),
-  badge: '188863',
-  id: 168011,
-})
-
-set.addAchievement({
-  title: `I'm Not a Doctor - I'm an Electrician!`,
-  description:
-    'In Set Mode, defeat Wattson in your first battle with him without using items in battle and without any Pokemon being higher than level 24 at the beginning of the battle',
-  points: 10,
-  type: 'missable',
-  conditions: {
-    core: $(
-      ['AddAddress', 'Mem', '24bit', 0x5d8c],
-      ['AndNext', 'Mem', 'Bit1', 0x7069, '=', 'Value', '', 1],
-      ['AndNext', 'Mem', '8bit', 0x3f32c, '=', 'Value', '', 9],
-      ['AndNext', 'Mem', '8bit', 0x2c540, '<=', 'Value', '', 24, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c5a4, '<=', 'Value', '', 24, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c608, '<=', 'Value', '', 24, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c66c, '<=', 'Value', '', 24, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c6d0, '<=', 'Value', '', 24, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c734, '<=', 'Value', '', 24, 1],
-      ['AndNext', 'Mem', '8bit', 0xf48, '=', 'Value', '', 221, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c33a, '>', 'Delta', '8bit', 0x2c33a, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c33a, '=', 'Value', '', 1, 1],
-      ['AddAddress', 'Mem', '24bit', 0x5d8c],
-      ['', 'Mem', 'Bit1', 0x937d, '>', 'Delta', 'Bit1', 0x937d],
-      ['AndNext', 'Mem', '8bit', 0xf48, '=', 'Value', '', 221, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c33a, '>', 'Delta', '8bit', 0x2c33a, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c33a, '=', 'Value', '', 2, 1],
-      ['ResetIf', 'Mem', '8bit', 0x3f32c, '!=', 'Value', '', 9],
-      ['AndNext', 'Mem', '8bit', 0x3f32c, '=', 'Value', '', 9],
-      ['AndNext', 'Mem', '8bit', 0xf48, '=', 'Value', '', 221],
-      ['PauseIf', 'Mem', '8bit', 0x16802, '=', 'Value', '', 2, 1],
-    ),
-    alt1: $(['', 'Mem', '8bit', 0xf48, '=', 'Mem', '8bit', 0xf48]),
-    alt2: $(['ResetIf', 'Mem', '8bit', 0x3f32c, '!=', 'Value', '', 9]),
-  },
-  badge: '188864',
-  id: 168012,
-})
-
-set.addAchievement({
-  title: 'Family Trip',
-  description: 'Defeat the Winstrate family',
-  points: 5,
-  conditions: $(
-    ['AndNext', 'Mem', '8bit', 0x3f32c, '=', 'Value', '', 26],
-    ['AndNext', 'Mem', '8bit', 0x3f360, '=', 'Value', '', 20],
-    ['AndNext', 'Mem', '8bit', 0x3f362, '=', 'Value', '', 122],
-    ['AndNext', 'Mem', '8bit', 0xf48, '=', 'Value', '', 220],
-    ['AndNext', 'Mem', '8bit', 0x2c33a, '>', 'Delta', '8bit', 0x2c33a, 4],
-    ['', 'Mem', '8bit', 0x2c33a, '=', 'Value', '', 1],
-    ['AndNext', 'Mem', '8bit', 0x2c33a, '>', 'Delta', '8bit', 0x2c33a, 1],
-    ['AndNext', 'Mem', '8bit', 0x2c33a, '=', 'Value', '', 2, 1],
-    ['ResetIf', 'Mem', '8bit', 0x3f32c, '!=', 'Value', '', 26],
-    ['ResetIf', 'Mem', '8bit', 0x3f32c, '!=', 'Value', '', 26],
-  ),
-  badge: '201873',
-  id: 168013,
-})
-
-set.addAchievement({
-  title: 'Family Game Night',
-  description:
-    'In Set Mode, defeat the Winstrate family in your first battles with them without using items in battle and without any Pokemon being higher than level 24 at the beginning of the battle',
-  points: 5,
-  type: 'missable',
-  conditions: {
-    core: $(
-      ['AddAddress', 'Mem', '24bit', 0x5d8c],
-      ['AndNext', 'Mem', 'Bit1', 0x7069, '=', 'Value', '', 1],
-      ['AndNext', 'Mem', '8bit', 0x3f32c, '=', 'Value', '', 26],
-      ['AndNext', 'Mem', '8bit', 0x3f360, '=', 'Value', '', 20],
-      ['AndNext', 'Mem', '8bit', 0x3f362, '=', 'Value', '', 122],
-      ['AndNext', 'Mem', '8bit', 0x2c540, '<=', 'Value', '', 24, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c5a4, '<=', 'Value', '', 24, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c608, '<=', 'Value', '', 24, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c66c, '<=', 'Value', '', 24, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c6d0, '<=', 'Value', '', 24, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c734, '<=', 'Value', '', 24, 1],
-      ['AndNext', 'Mem', '8bit', 0xf48, '=', 'Value', '', 220],
-      ['AndNext', 'Mem', '8bit', 0x2c33a, '>', 'Delta', '8bit', 0x2c33a, 4],
-      ['', 'Mem', '8bit', 0x2c33a, '=', 'Value', '', 1],
-      ['AndNext', 'Mem', '8bit', 0x2c33a, '>', 'Delta', '8bit', 0x2c33a],
-      ['AndNext', 'Mem', '8bit', 0x2c33a, '=', 'Value', '', 2],
-      ['ResetIf', 'Mem', '8bit', 0x3f32c, '!=', 'Value', '', 26],
-      ['AndNext', 'Mem', '8bit', 0x3f32c, '=', 'Value', '', 26],
-      ['AndNext', 'Mem', '8bit', 0x3f360, '=', 'Value', '', 20],
-      ['AndNext', 'Mem', '8bit', 0x3f362, '=', 'Value', '', 122],
-      ['AndNext', 'Mem', '8bit', 0xf48, '=', 'Value', '', 220],
-      ['PauseIf', 'Mem', '8bit', 0x16802, '=', 'Value', '', 2, 1],
-    ),
-    alt1: $(['', 'Mem', '8bit', 0xf48, '=', 'Mem', '8bit', 0xf48]),
-    alt2: $(['ResetIf', 'Mem', '8bit', 0x3f32c, '!=', 'Value', '', 26]),
-  },
-  badge: '201874',
-  id: 168014,
-})
-
-set.addAchievement({
-  title: 'Candente!',
-  description: 'Defeat Flannery, the Gym Leader of Lavaridge Town',
-  points: 10,
-  type: 'progression',
-  conditions: $(
-    ['AndNext', 'Mem', '8bit', 0x3f32c, '=', 'Value', '', 3],
-    ['AndNext', 'Mem', '8bit', 0xf48, '=', 'Value', '', 221, 1],
-    ['AndNext', 'Mem', '8bit', 0x2c33a, '>', 'Delta', '8bit', 0x2c33a, 1],
-    ['AndNext', 'Mem', '8bit', 0x2c33a, '=', 'Value', '', 1, 1],
-    ['AddAddress', 'Mem', '24bit', 0x5d8c],
-    ['', 'Mem', 'Bit2', 0x937d, '>', 'Delta', 'Bit2', 0x937d],
-    ['AndNext', 'Mem', '8bit', 0xf48, '=', 'Value', '', 221, 1],
-    ['AndNext', 'Mem', '8bit', 0x2c33a, '>', 'Delta', '8bit', 0x2c33a, 1],
-    ['AndNext', 'Mem', '8bit', 0x2c33a, '=', 'Value', '', 2, 1],
-    ['ResetIf', 'Mem', '8bit', 0x3f32c, '!=', 'Value', '', 3],
-    ['ResetIf', 'Mem', '8bit', 0x3f32c, '!=', 'Value', '', 3],
-  ),
-  badge: '188874',
-  id: 168030,
-})
-
-set.addAchievement({
-  title: 'Super Candente!',
-  description:
-    'In Set Mode, defeat Flannery in your first battle with her without using items in battle and without any Pokemon being higher than level 29 at the beginning of the battle',
-  points: 10,
-  type: 'missable',
-  conditions: {
-    core: $(
-      ['AddAddress', 'Mem', '24bit', 0x5d8c],
-      ['AndNext', 'Mem', 'Bit1', 0x7069, '=', 'Value', '', 1],
-      ['AndNext', 'Mem', '8bit', 0x3f32c, '=', 'Value', '', 3],
-      ['AndNext', 'Mem', '8bit', 0x2c540, '<=', 'Value', '', 29, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c5a4, '<=', 'Value', '', 29, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c608, '<=', 'Value', '', 29, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c66c, '<=', 'Value', '', 29, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c6d0, '<=', 'Value', '', 29, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c734, '<=', 'Value', '', 29, 1],
-      ['AndNext', 'Mem', '8bit', 0xf48, '=', 'Value', '', 221, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c33a, '>', 'Delta', '8bit', 0x2c33a, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c33a, '=', 'Value', '', 1, 1],
-      ['AddAddress', 'Mem', '24bit', 0x5d8c],
-      ['', 'Mem', 'Bit2', 0x937d, '>', 'Delta', 'Bit2', 0x937d],
-      ['AndNext', 'Mem', '8bit', 0xf48, '=', 'Value', '', 221, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c33a, '>', 'Delta', '8bit', 0x2c33a, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c33a, '=', 'Value', '', 2, 1],
-      ['ResetIf', 'Mem', '8bit', 0x3f32c, '!=', 'Value', '', 3],
-      ['AndNext', 'Mem', '8bit', 0x3f32c, '=', 'Value', '', 3],
-      ['AndNext', 'Mem', '8bit', 0xf48, '=', 'Value', '', 221],
-      ['PauseIf', 'Mem', '8bit', 0x16802, '=', 'Value', '', 2, 1],
-    ),
-    alt1: $(['', 'Mem', '8bit', 0xf48, '=', 'Mem', '8bit', 0xf48]),
-    alt2: $(['ResetIf', 'Mem', '8bit', 0x3f32c, '!=', 'Value', '', 3]),
-  },
-  badge: '188875',
-  id: 168031,
-})
-
-set.addAchievement({
-  title: 'Just Normal',
-  description: 'Defeat Norman, the Gym Leader of Petalburg City',
-  points: 10,
-  type: 'progression',
-  conditions: $(
-    ['AndNext', 'Mem', '8bit', 0x3f32c, '=', 'Value', '', 7],
-    ['AndNext', 'Mem', '8bit', 0xf48, '=', 'Value', '', 221, 1],
-    ['AndNext', 'Mem', '8bit', 0x2c33a, '>', 'Delta', '8bit', 0x2c33a, 1],
-    ['AndNext', 'Mem', '8bit', 0x2c33a, '=', 'Value', '', 1, 1],
-    ['AddAddress', 'Mem', '24bit', 0x5d8c],
-    ['', 'Mem', 'Bit3', 0x937d, '>', 'Delta', 'Bit3', 0x937d],
-    ['AndNext', 'Mem', '8bit', 0xf48, '=', 'Value', '', 221, 1],
-    ['AndNext', 'Mem', '8bit', 0x2c33a, '>', 'Delta', '8bit', 0x2c33a, 1],
-    ['AndNext', 'Mem', '8bit', 0x2c33a, '=', 'Value', '', 2, 1],
-    ['ResetIf', 'Mem', '8bit', 0x3f32c, '!=', 'Value', '', 7],
-    ['ResetIf', 'Mem', '8bit', 0x3f32c, '!=', 'Value', '', 7],
-  ),
-  badge: '188876',
-  id: 168032,
-})
-
-set.addAchievement({
-  title: 'Hyper Normalization',
-  description:
-    'In Set Mode, defeat Norman in your first battle with him without using items in battle and without any Pokemon being higher than level 31 at the beginning of the battle',
-  points: 10,
-  type: 'missable',
-  conditions: {
-    core: $(
-      ['AddAddress', 'Mem', '24bit', 0x5d8c],
-      ['AndNext', 'Mem', 'Bit1', 0x7069, '=', 'Value', '', 1],
-      ['AndNext', 'Mem', '8bit', 0x3f32c, '=', 'Value', '', 7],
-      ['AndNext', 'Mem', '8bit', 0x2c540, '<=', 'Value', '', 31, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c5a4, '<=', 'Value', '', 31, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c608, '<=', 'Value', '', 31, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c66c, '<=', 'Value', '', 31, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c6d0, '<=', 'Value', '', 31, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c734, '<=', 'Value', '', 31, 1],
-      ['AndNext', 'Mem', '8bit', 0xf48, '=', 'Value', '', 221, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c33a, '>', 'Delta', '8bit', 0x2c33a, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c33a, '=', 'Value', '', 1, 1],
-      ['AddAddress', 'Mem', '24bit', 0x5d8c],
-      ['', 'Mem', 'Bit3', 0x937d, '>', 'Delta', 'Bit3', 0x937d],
-      ['AndNext', 'Mem', '8bit', 0x3f32c, '=', 'Value', '', 7],
-      ['AndNext', 'Mem', '8bit', 0xf48, '=', 'Value', '', 221],
-      ['PauseIf', 'Mem', '8bit', 0x16802, '=', 'Value', '', 2, 1],
-      ['AndNext', 'Mem', '8bit', 0xf48, '=', 'Value', '', 221, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c33a, '>', 'Delta', '8bit', 0x2c33a, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c33a, '=', 'Value', '', 2, 1],
-      ['ResetIf', 'Mem', '8bit', 0x3f32c, '!=', 'Value', '', 7],
-    ),
-    alt1: $(['', 'Mem', '8bit', 0xf48, '=', 'Mem', '8bit', 0xf48]),
-    alt2: $(['ResetIf', 'Mem', '8bit', 0x3f32c, '!=', 'Value', '', 7]),
-  },
-  badge: '188877',
-  id: 168033,
-})
-
-set.addAchievement({
-  title: 'Master of the Skies',
-  description: 'Defeat Winona, the Gym Leader of Fortree City',
-  points: 10,
-  type: 'progression',
-  conditions: $(
-    ['AndNext', 'Mem', '8bit', 0x3f32c, '=', 'Value', '', 11],
-    ['AndNext', 'Mem', '8bit', 0xf48, '=', 'Value', '', 221, 1],
-    ['AndNext', 'Mem', '8bit', 0x2c33a, '>', 'Delta', '8bit', 0x2c33a, 1],
-    ['AndNext', 'Mem', '8bit', 0x2c33a, '=', 'Value', '', 1, 1],
-    ['AddAddress', 'Mem', '24bit', 0x5d8c],
-    ['', 'Mem', 'Bit4', 0x937d, '>', 'Delta', 'Bit4', 0x937d],
-    ['AndNext', 'Mem', '8bit', 0xf48, '=', 'Value', '', 221, 1],
-    ['AndNext', 'Mem', '8bit', 0x2c33a, '>', 'Delta', '8bit', 0x2c33a, 1],
-    ['AndNext', 'Mem', '8bit', 0x2c33a, '=', 'Value', '', 2, 1],
-    ['ResetIf', 'Mem', '8bit', 0x3f32c, '!=', 'Value', '', 11],
-    ['ResetIf', 'Mem', '8bit', 0x3f32c, '!=', 'Value', '', 11],
-  ),
-  badge: '188900',
-  id: 168044,
-})
-
-set.addAchievement({
-  title: 'Renewal Wings',
-  description:
-    'In Set Mode, defeat Winona in your first battle with her without using items in battle and without any Pokemon being higher than level 33 at the beginning of the battle',
-  points: 10,
-  type: 'missable',
-  conditions: {
-    core: $(
-      ['AddAddress', 'Mem', '24bit', 0x5d8c],
-      ['AndNext', 'Mem', 'Bit1', 0x7069, '=', 'Value', '', 1],
-      ['AndNext', 'Mem', '8bit', 0x3f32c, '=', 'Value', '', 11],
-      ['AndNext', 'Mem', '8bit', 0x2c540, '<=', 'Value', '', 33, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c5a4, '<=', 'Value', '', 33, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c608, '<=', 'Value', '', 33, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c66c, '<=', 'Value', '', 33, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c6d0, '<=', 'Value', '', 33, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c734, '<=', 'Value', '', 33, 1],
-      ['AndNext', 'Mem', '8bit', 0xf48, '=', 'Value', '', 221, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c33a, '>', 'Delta', '8bit', 0x2c33a, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c33a, '=', 'Value', '', 1, 1],
-      ['AddAddress', 'Mem', '24bit', 0x5d8c],
-      ['', 'Mem', 'Bit4', 0x937d, '>', 'Delta', 'Bit4', 0x937d],
-      ['AndNext', 'Mem', '8bit', 0xf48, '=', 'Value', '', 221, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c33a, '>', 'Delta', '8bit', 0x2c33a, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c33a, '=', 'Value', '', 2, 1],
-      ['ResetIf', 'Mem', '8bit', 0x3f32c, '!=', 'Value', '', 11],
-      ['AndNext', 'Mem', '8bit', 0x3f32c, '=', 'Value', '', 11],
-      ['AndNext', 'Mem', '8bit', 0xf48, '=', 'Value', '', 221],
-      ['PauseIf', 'Mem', '8bit', 0x16802, '=', 'Value', '', 2, 1],
-    ),
-    alt1: $(['', 'Mem', '8bit', 0xf48, '=', 'Mem', '8bit', 0xf48]),
-    alt2: $(['ResetIf', 'Mem', '8bit', 0x3f32c, '!=', 'Value', '', 11]),
-  },
-  badge: '188901',
-  id: 168045,
-})
-
-set.addAchievement({
-  title: 'Two Minds Are Better Than One',
-  description: 'Defeat Tate and Liza, the Gym Leaders of Mossdeep City',
-  points: 10,
-  type: 'progression',
-  conditions: $(
-    ['AndNext', 'Mem', '8bit', 0x3f32c, '=', 'Value', '', 13],
-    ['AndNext', 'Mem', '8bit', 0xf48, '=', 'Value', '', 221, 1],
-    ['AndNext', 'Mem', '8bit', 0x2c33a, '>', 'Delta', '8bit', 0x2c33a, 1],
-    ['AndNext', 'Mem', '8bit', 0x2c33a, '=', 'Value', '', 1, 1],
-    ['AddAddress', 'Mem', '24bit', 0x5d8c],
-    ['', 'Mem', 'Bit5', 0x937d, '>', 'Delta', 'Bit5', 0x937d],
-    ['AndNext', 'Mem', '8bit', 0xf48, '=', 'Value', '', 221, 1],
-    ['AndNext', 'Mem', '8bit', 0x2c33a, '>', 'Delta', '8bit', 0x2c33a, 1],
-    ['AndNext', 'Mem', '8bit', 0x2c33a, '=', 'Value', '', 2, 1],
-    ['ResetIf', 'Mem', '8bit', 0x3f32c, '!=', 'Value', '', 13],
-    ['ResetIf', 'Mem', '8bit', 0x3f32c, '!=', 'Value', '', 13],
-  ),
-  badge: '188928',
-  id: 168054,
-})
-
-set.addAchievement({
-  title: 'Our IQ Is Over 9000!',
-  description:
-    'In Set Mode, defeat Tate and Liza in your first battle with them without using items in battle and without any Pokemon being higher than level 42 at the beginning of the battle',
-  points: 10,
-  type: 'missable',
-  conditions: {
-    core: $(
-      ['AddAddress', 'Mem', '24bit', 0x5d8c],
-      ['AndNext', 'Mem', 'Bit1', 0x7069, '=', 'Value', '', 1],
-      ['AndNext', 'Mem', '8bit', 0x3f32c, '=', 'Value', '', 13],
-      ['AndNext', 'Mem', '8bit', 0x2c540, '<=', 'Value', '', 42, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c5a4, '<=', 'Value', '', 42, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c608, '<=', 'Value', '', 42, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c66c, '<=', 'Value', '', 42, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c6d0, '<=', 'Value', '', 42, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c734, '<=', 'Value', '', 42, 1],
-      ['AndNext', 'Mem', '8bit', 0xf48, '=', 'Value', '', 221, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c33a, '>', 'Delta', '8bit', 0x2c33a, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c33a, '=', 'Value', '', 1, 1],
-      ['AddAddress', 'Mem', '24bit', 0x5d8c],
-      ['', 'Mem', 'Bit5', 0x937d, '>', 'Delta', 'Bit5', 0x937d],
-      ['AndNext', 'Mem', '8bit', 0xf48, '=', 'Value', '', 221, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c33a, '>', 'Delta', '8bit', 0x2c33a, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c33a, '=', 'Value', '', 2, 1],
-      ['ResetIf', 'Mem', '8bit', 0x3f32c, '!=', 'Value', '', 13],
-      ['AndNext', 'Mem', '8bit', 0x3f32c, '=', 'Value', '', 13],
-      ['AndNext', 'Mem', '8bit', 0xf48, '=', 'Value', '', 221],
-      ['PauseIf', 'Mem', '8bit', 0x16802, '=', 'Value', '', 2, 1],
-    ),
-    alt1: $(['', 'Mem', '8bit', 0xf48, '=', 'Mem', '8bit', 0xf48]),
-    alt2: $(['ResetIf', 'Mem', '8bit', 0x3f32c, '!=', 'Value', '', 13]),
-  },
-  badge: '188929',
-  id: 168055,
-})
-
-set.addAchievement({
-  title: 'Ice Juan',
-  description: 'Defeat Juan, the Gym Leader of Sootopolis City',
-  points: 10,
-  type: 'progression',
-  conditions: $(
-    ['AndNext', 'Mem', '8bit', 0x3f32c, '=', 'Value', '', 14],
-    ['AndNext', 'Mem', '8bit', 0xf48, '=', 'Value', '', 221, 1],
-    ['AndNext', 'Mem', '8bit', 0x2c33a, '>', 'Delta', '8bit', 0x2c33a, 1],
-    ['AndNext', 'Mem', '8bit', 0x2c33a, '=', 'Value', '', 1, 1],
-    ['AddAddress', 'Mem', '24bit', 0x5d8c],
-    ['', 'Mem', 'Bit6', 0x937d, '>', 'Delta', 'Bit6', 0x937d],
-    ['AndNext', 'Mem', '8bit', 0xf48, '=', 'Value', '', 221, 1],
-    ['AndNext', 'Mem', '8bit', 0x2c33a, '>', 'Delta', '8bit', 0x2c33a, 1],
-    ['AndNext', 'Mem', '8bit', 0x2c33a, '=', 'Value', '', 2, 1],
-    ['ResetIf', 'Mem', '8bit', 0x3f32c, '!=', 'Value', '', 14],
-    ['ResetIf', 'Mem', '8bit', 0x3f32c, '!=', 'Value', '', 14],
-  ),
-  badge: '188961',
-  id: 168127,
-})
-
-set.addAchievement({
-  title: 'Ice King Juan',
-  description:
-    'In Set Mode, defeat Juan in your first battle with him without using items in battle and without any Pokemon being higher than level 46 at the beginning of the battle',
-  points: 10,
-  type: 'missable',
-  conditions: {
-    core: $(
-      ['AddAddress', 'Mem', '24bit', 0x5d8c],
-      ['AndNext', 'Mem', 'Bit1', 0x7069, '=', 'Value', '', 1],
-      ['AndNext', 'Mem', '8bit', 0x3f32c, '=', 'Value', '', 14],
-      ['AndNext', 'Mem', '8bit', 0x2c540, '<=', 'Value', '', 46, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c5a4, '<=', 'Value', '', 46, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c608, '<=', 'Value', '', 46, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c66c, '<=', 'Value', '', 46, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c6d0, '<=', 'Value', '', 46, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c734, '<=', 'Value', '', 46, 1],
-      ['AndNext', 'Mem', '8bit', 0xf48, '=', 'Value', '', 221, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c33a, '>', 'Delta', '8bit', 0x2c33a, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c33a, '=', 'Value', '', 1, 1],
-      ['AddAddress', 'Mem', '24bit', 0x5d8c],
-      ['', 'Mem', 'Bit6', 0x937d, '>', 'Delta', 'Bit6', 0x937d],
-      ['AndNext', 'Mem', '8bit', 0xf48, '=', 'Value', '', 221, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c33a, '>', 'Delta', '8bit', 0x2c33a, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c33a, '=', 'Value', '', 2, 1],
-      ['ResetIf', 'Mem', '8bit', 0x3f32c, '!=', 'Value', '', 14],
-      ['AndNext', 'Mem', '8bit', 0x3f32c, '=', 'Value', '', 14],
-      ['AndNext', 'Mem', '8bit', 0xf48, '=', 'Value', '', 221],
-      ['PauseIf', 'Mem', '8bit', 0x16802, '=', 'Value', '', 2, 1],
-    ),
-    alt1: $(['', 'Mem', '8bit', 0xf48, '=', 'Mem', '8bit', 0xf48]),
-    alt2: $(['ResetIf', 'Mem', '8bit', 0x3f32c, '!=', 'Value', '', 14]),
-  },
-  badge: '188962',
-  id: 168128,
-})
+  set.addAchievement({
+    title: title,
+    description: description,
+    points: 10,
+    type: 'missable',
+    conditions: (
+      mdf.simple_achievement_logic([
+        {fn: codeNotes.in_game_check, args: []},
+        {fn: codeNotes.pointer_check, args: ["main_pointer"]},
+        {fn: set_mode, args: []},
+        {fn: in_gym_leader_battle, args: []},
+        {fn: level_caps, args: [gym_level_caps[i-1]]},
+        {fn: codeNotes.event_flag_triggering, args: ["main_pointer", badge]},
+        {fn: backpack_check, args: [gym_maps[i-1], "gym_leader_room"]},
+        {fn: map_check, args: [gym_maps[i-1], "gym_leader_room"]}
+      ], codeNotes.list_of_versions)
+    )
+  })
+}
 
 set.addAchievement({
   title: 'Randomized League',
   description: 'In a single session, defeat the Elite Four and the Champion',
   points: 25,
   type: 'win_condition',
-  conditions: $(
-    ['AndNext', 'Mem', '8bit', 0x3a2e4, '=', 'Value', '', 16],
-    ['AndNext', 'Mem', '8bit', 0x2c33a, '>', 'Delta', '8bit', 0x2c33a, 5],
-    ['', 'Mem', '8bit', 0x2c33a, '=', 'Value', '', 1, 1],
-    ['AndNext', 'Mem', '8bit', 0xf48, '=', 'Value', '', 226, 1],
-    ['AndNext', 'Mem', '8bit', 0x2c33a, '>', 'Delta', '8bit', 0x2c33a, 1],
-    ['AndNext', 'Mem', '8bit', 0x2c33a, '=', 'Value', '', 2, 1],
-    ['ResetIf', 'Mem', '8bit', 0x3a2e4, '!=', 'Value', '', 16],
-    ['AndNext', 'Mem', '8bit', 0xf48, '=', 'Value', '', 222, 1],
-    ['AndNext', 'Mem', '8bit', 0x2c33a, '>', 'Delta', '8bit', 0x2c33a, 1],
-    ['AndNext', 'Mem', '8bit', 0x2c33a, '=', 'Value', '', 2, 1],
-    ['ResetIf', 'Mem', '8bit', 0x3a2e4, '!=', 'Value', '', 16],
-    ['ResetIf', 'Mem', '8bit', 0x3a2e4, '!=', 'Value', '', 16],
-  ),
-  badge: '188965',
-  id: 168138,
+  conditions: (
+    mdf.simple_achievement_logic([
+      {fn: codeNotes.in_game_check, args: []},
+      {fn: in_map_bank, args: ["league"]},
+      {fn: league_win, args: []},
+      {fn: lose, args: []},
+      {fn: not_in_map_bank, args: ["league"]}
+    ], codeNotes.list_of_versions)
+  )
 })
 
 set.addAchievement({
   title: 'The Luckiest Champion in the World',
   description:
-    'In Set Mode, defeat the Elite Four and the Champion in a single session without using items in battle and without any Pokemon being higher than level 58 at the beginning of the first battle; start each attempt from the Pokemon Center',
+    'In Set Mode, defeat the Elite Four and the Champion in a single session without opening the backpack in battle and without any Pokemon being higher than level 58 at the beginning of the first battle; start each attempt from the Pokemon Center',
   points: 50,
-  conditions: {
-    core: $(
-      ['AddAddress', 'Mem', '24bit', 0x5d8c],
-      ['AndNext', 'Mem', 'Bit1', 0x7069, '=', 'Value', '', 1],
-      ['AndNext', 'Mem', '8bit', 0x3a2e4, '=', 'Value', '', 16],
-      ['AndNext', 'Mem', '8bit', 0x2c540, '<=', 'Value', '', 58, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c5a4, '<=', 'Value', '', 58, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c608, '<=', 'Value', '', 58, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c66c, '<=', 'Value', '', 58, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c6d0, '<=', 'Value', '', 58, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c734, '<=', 'Value', '', 58, 1],
-      ['AndNext', 'Mem', '8bit', 0xd63c, '=', 'Value', '', 1],
-      ['AndNext', 'Mem', '8bit', 0x2c33a, '>', 'Delta', '8bit', 0x2c33a, 5],
-      ['', 'Mem', '8bit', 0x2c33a, '=', 'Value', '', 1, 1],
-      ['AndNext', 'Mem', '8bit', 0x3a2e4, '=', 'Value', '', 16],
-      ['AndNext', 'Mem', '8bit', 0xd63c, '=', 'Value', '', 1],
-      ['PauseIf', 'Mem', '8bit', 0x16802, '=', 'Value', '', 2, 1],
-    ),
-    alt1: $(['', 'Mem', '8bit', 0xf48, '=', 'Mem', '8bit', 0xf48]),
-    alt2: $(['ResetIf', 'Mem', '8bit', 0x3a2e4, '!=', 'Value', '', 16]),
-  },
-  badge: '188966',
-  id: 168139,
+  conditions: (
+      mdf.simple_achievement_logic([
+        {fn: codeNotes.in_game_check, args: []},
+        {fn: set_mode, args: []},
+        {fn: in_map_bank, args: ["league"]},
+        {fn: level_caps, args: [58]},
+        {fn: league_win, args: []},
+        {fn: backpack_check_leage, args: ["league"]},
+        {fn: lose, args: []},
+        {fn: not_in_map_bank, args: ["league"]}
+      ], codeNotes.list_of_versions)
+  )
 })
+
+function vs_steven(i){
+  var version = codeNotes.list_of_versions[i]
+  var music = version.music
+  var address = music.address
+  var size = music.size
+  var type = music.type
+  var value = music.values.steven
+
+  return $(
+    ["AndNext", type, size, address, "=", "Value", "", value, 0]
+  )
+}
+
+function victory(i){
+  var version = codeNotes.list_of_versions[i]
+  var battle_state = version.battle_data.battle_state
+  var type = battle_state.type
+  var size = battle_state.size
+  var address = battle_state.address
+  var value = battle_state.values.win
+  return $(
+    ["AndNext", "Delta", size, address, "=", "Value", "", 0, 0],
+    ["", type, size, address, "=", "Value", "", value, 0]
+  )
+}
+
+function backpack_check_steven(i, mb, sb){
+  var version = codeNotes.list_of_versions[i]
+  var logic = []
+  // Map Bank
+  var code_note = version.maps.map_bank
+  var address = code_note.address
+  var size = code_note.size
+  var type = code_note.type
+  var map = version.maps.areas[mb]
+  var value = map.map_bank
+  logic.push(
+    ["OrNext", type, size, address, "!=", "Value", "", value, 0]
+  )
+  // Sub Bank
+  var code_note = version.maps.sub_bank
+  var address = code_note.address
+  var size = code_note.size
+  var type = code_note.type
+  var value = map.sub_map[sb]
+  logic.push(
+    ["ResetNextIf", type, size, address, "!=", "Value", "", value, 0]
+  )
+  // Music
+  var code_note = version.music
+  var address = code_note.address
+  var size = code_note.size
+  var type = code_note.type
+  var value = code_note.values.steven
+  logic.push(
+    ["AndNext", type, size, address, "=", "Value", "", value, 0]
+  )
+  // Bag open in battle
+  var code_note = version.bag_open_in_battle
+  var address = code_note.address
+  var size = code_note.size
+  var type = code_note.type
+  var value = 2
+  logic.push(
+    ["PauseIf", type, size, address, "=", "Value", "", value, 1]
+  )
+
+  return mdf.assembler(logic)
+}
 
 set.addAchievement({
   title: 'An Enthusiastic Geologist',
   description:
     'After beating the Pokemon League, defeat Steven Stone in Meteor Falls',
   points: 25,
-  conditions: $(
-    ['AndNext', 'Mem', '8bit', 0x3f32c, '=', 'Value', '', 63],
-    ['AndNext', 'Mem', '8bit', 0xf48, '=', 'Value', '', 225, 1],
-    ['AndNext', 'Mem', '8bit', 0x2c33a, '>', 'Delta', '8bit', 0x2c33a, 1],
-    ['', 'Mem', '8bit', 0x2c33a, '=', 'Value', '', 1],
-    ['AndNext', 'Mem', '8bit', 0xf48, '=', 'Value', '', 225, 1],
-    ['AndNext', 'Mem', '8bit', 0x2c33a, '>', 'Delta', '8bit', 0x2c33a, 1],
-    ['AndNext', 'Mem', '8bit', 0x2c33a, '=', 'Value', '', 2, 1],
-    ['ResetIf', 'Mem', '8bit', 0x3f32c, '!=', 'Value', '', 63],
-    ['ResetIf', 'Mem', '8bit', 0x3f32c, '!=', 'Value', '', 63],
-  ),
-  badge: '188972',
-  id: 168145,
+  conditions: (
+    mdf.simple_achievement_logic([
+      {fn: codeNotes.in_game_check, args: []},
+      {fn: codeNotes.while_in_map, args: ["steven_cave", "steven_room"]},
+      {fn: vs_steven, args: []},
+      {fn: victory, args: []},
+    ], codeNotes.list_of_versions)
+  )
 })
 
 set.addAchievement({
   title: 'Champion of Geology',
   description:
-    'In Set Mode, defeat Steven Stone in Meteor Falls in your first battle with him without using items in battle and without any Pokemon being higher than level 78 at the beginning of the battle',
+    'In Set Mode, defeat Steven Stone in Meteor Falls in your first battle with him without opening the backpack in battle and without any Pokemon being higher than level 78 at the beginning of the battle',
   points: 25,
   type: 'missable',
-  conditions: {
-    core: $(
-      ['AddAddress', 'Mem', '24bit', 0x5d8c],
-      ['AndNext', 'Mem', 'Bit1', 0x7069, '=', 'Value', '', 1],
-      ['AndNext', 'Mem', '8bit', 0x3f32c, '=', 'Value', '', 63],
-      ['AndNext', 'Mem', '8bit', 0x2c540, '<=', 'Value', '', 78, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c5a4, '<=', 'Value', '', 78, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c608, '<=', 'Value', '', 78, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c66c, '<=', 'Value', '', 78, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c6d0, '<=', 'Value', '', 78, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c734, '<=', 'Value', '', 78, 1],
-      ['AndNext', 'Mem', '8bit', 0xf48, '=', 'Value', '', 225, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c33a, '>', 'Delta', '8bit', 0x2c33a, 1],
-      ['', 'Mem', '8bit', 0x2c33a, '=', 'Value', '', 1],
-      ['AndNext', 'Mem', '8bit', 0xf48, '=', 'Value', '', 225, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c33a, '>', 'Delta', '8bit', 0x2c33a, 1],
-      ['AndNext', 'Mem', '8bit', 0x2c33a, '=', 'Value', '', 2, 1],
-      ['ResetIf', 'Mem', '8bit', 0x3f32c, '!=', 'Value', '', 63],
-      ['AndNext', 'Mem', '8bit', 0x3f32c, '=', 'Value', '', 63],
-      ['AndNext', 'Mem', '8bit', 0xf48, '=', 'Value', '', 225],
-      ['PauseIf', 'Mem', '8bit', 0x16802, '=', 'Value', '', 2, 1],
-    ),
-    alt1: $(['', 'Mem', '8bit', 0xf48, '=', 'Mem', '8bit', 0xf48]),
-    alt2: $(['ResetIf', 'Mem', '8bit', 0x3f32c, '!=', 'Value', '', 63]),
-  },
-  badge: '188973',
-  id: 168146,
+  conditions: (
+    mdf.simple_achievement_logic([
+      {fn: codeNotes.in_game_check, args: []},
+      {fn: set_mode, args: []},
+      {fn: codeNotes.while_in_map, args: ["steven_cave", "steven_room"]},
+      {fn: vs_steven, args: []},
+      {fn: level_caps, args: [78]},
+      {fn: victory, args: []},
+      {fn: backpack_check_steven, args: ["steven_cave", "steven_room"]},
+      {fn: map_check, args: ["steven_cave", "steven_room"]}
+    ], codeNotes.list_of_versions)
+  )
 })
+
+set.addAchievement({
+  title: `Gotta Randomize 'em All!`,
+  description: 'Catch all 386 Pokemon',
+  points: 25,
+  conditions: (
+    mdf.simple_achievement_logic([
+      {fn: codeNotes.in_game_check, args: []},
+      {fn: pokedex, args: []}
+    ], codeNotes.list_of_versions)
+  )
+})
+
+// Demoted achievements ============
+
+// Some notes for the surfing and diving achievements
+// in-game check logic
+// Logic with player_movement_type
+//// Use 0x8 for surfing and 0x10 for diving
+// Logic with battle_data.own_pokemon_id to check that it have changed (happens in battle)
+//// Include a hit of 1 for the change
+// Use the music ID that have to be different from 220 and 218
+//chain everything but the in-game check with AndNext
+//(
+//  mdf.simple_achievement_logic([
+//    {fn: codeNotes.in_game_check, args: []},
+//    {fn: surf_dive, args: ["surfing"]}
+//  ], codeNotes.list_of_versions)
+//)
+
 
 set.addAchievement({
   title: 'An Entire Booster Pack!',
@@ -747,10 +625,11 @@ set.addAchievement({
   id: 159792,
 })
 
+
 set.addAchievement({
   title: 'Ultimate Copycat',
   description:
-    'Use the same Pokemon in battle that you are fighting; Transform is allowed',
+  'Use the same Pokemon in battle that you are fighting; Transform is allowed',
   points: 5,
   conditions: $(
     ['', 'Mem', '8bit', 0x3f32f, '!=', 'Value', '', 0],
@@ -767,7 +646,7 @@ set.addAchievement({
 set.addAchievement({
   title: `It's Okay, I Know How to Swim`,
   description:
-    'While surfing, lose your Pokemon that has Surf to a random change',
+  'While surfing, lose your Pokemon that has Surf to a random change',
   points: 1,
   conditions: $(
     ['', 'Mem', '8bit', 0x3f32f, '!=', 'Value', '', 0],
@@ -775,273 +654,79 @@ set.addAchievement({
     ['AndNext', 'Mem', '16bit', 0x2c084, '!=', 'Delta', '16bit', 0x2c084, 1],
     ['AndNext', 'Mem', '8bit', 0xf48, '!=', 'Value', '', 220],
     ['', 'Mem', '8bit', 0xf48, '!=', 'Value', '', 218],
-  ),
-  badge: '188880',
-  id: 168034,
+  )
 })
 
 set.addAchievement({
   title: 'Luckily I Always Carry My Diving Equipment',
   description:
-    'While diving, lose your Pokemon that has Dive to a random change',
+  'While diving, lose your Pokemon that has Dive to a random change',
   points: 1,
   conditions: $(
     ['', 'Mem', '8bit', 0x3f32f, '!=', 'Value', '', 0],
     ['AndNext', 'Mem', '8bit', 0x3f590, '=', 'Value', '', 16],
     ['AndNext', 'Mem', '16bit', 0x2c084, '!=', 'Delta', '16bit', 0x2c084, 1],
     ['', 'Mem', '8bit', 0xf48, '!=', 'Value', '', 218],
-  ),
-  badge: '188881',
-  id: 168035,
+  )
 })
-
-functions pokedex(i){
-  var version = codeNotes.list_of_versions[i]
-  var start_range = version.pokedex_pointer.offsets.dex_1_8.offset
-  var end_range = version.pokedex_pointer.offsets.dex_385.offset - 0x1
-  var conditions = []
-  // Delta
-  for (let o = start_range; o <= end_range; o = o + 0x1) {
-    let logic = ["AddSource", "Delta", "BitCount", o]
-    let p = mdf.simple_pointer(version.pokedex_pointer, logic)
-    conditions.push(p)
-  }
-  var logic = ["AddSource", "Delta", version.pokedex_pointer.offsets.dex_385.size, version.pokedex_pointer.offsets.dex_385.offset]
-  var p = mdf.simple_pointer(version.pokedex_pointer, logic)
-  conditions.push(p)
-
-  var logic = ["AddSource", "Delta", version.pokedex_pointer.offsets.dex_386.size, version.pokedex_pointer.offsets.dex_386.offset]
-  var p = mdf.simple_pointer(version.pokedex_pointer, logic)
-  conditions.push(p)
-  // Mem
-  for (let o = start_range; o <= end_range; o = o + 0x1) {
-    let logic = ["AddSource", "Mem", "BitCount", o]
-    let p = mdf.simple_pointer(version.pokedex_pointer, logic)
-    conditions.push(p)
-  }
-  var logic = ["AddSource", "Mem", version.pokedex_pointer.offsets.dex_385.size, version.pokedex_pointer.offsets.dex_385.offset]
-  var p = mdf.simple_pointer(version.pokedex_pointer, logic)
-  conditions.push(p)
-
-  var logic = ["AddSource", "Mem", version.pokedex_pointer.offsets.dex_386.size, version.pokedex_pointer.offsets.dex_386.offset]
-  var p = mdf.simple_pointer(version.pokedex_pointer, logic)
-  conditions.push(p)
-
-  return conditions
-}
-
-function pokedex_achievement(){
-
-}
 
 set.addAchievement({
-  title: `Gotta Randomize 'em All!`,
-  description: 'Catch all 386 Pokemon',
-  points: 25,
+  title: 'Family Trip',
+  description: 'Defeat the Winstrate family',
+  points: 5,
   conditions: $(
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Delta', 'BitCount', 0x8028],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Delta', 'BitCount', 0x8029],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Delta', 'BitCount', 0x802a],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Delta', 'BitCount', 0x802b],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Delta', 'BitCount', 0x802c],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Delta', 'BitCount', 0x802d],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Delta', 'BitCount', 0x802e],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Delta', 'BitCount', 0x802f],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Delta', 'BitCount', 0x8030],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Delta', 'BitCount', 0x8031],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Delta', 'BitCount', 0x8032],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Delta', 'BitCount', 0x8033],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Delta', 'BitCount', 0x8034],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Delta', 'BitCount', 0x8035],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Delta', 'BitCount', 0x8036],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Delta', 'BitCount', 0x8037],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Delta', 'BitCount', 0x8038],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Delta', 'BitCount', 0x8039],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Delta', 'BitCount', 0x803a],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Delta', 'BitCount', 0x803b],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Delta', 'BitCount', 0x803c],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Delta', 'BitCount', 0x803d],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Delta', 'BitCount', 0x803e],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Delta', 'BitCount', 0x803f],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Delta', 'BitCount', 0x8040],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Delta', 'BitCount', 0x8041],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Delta', 'BitCount', 0x8042],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Delta', 'BitCount', 0x8043],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Delta', 'BitCount', 0x8044],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Delta', 'BitCount', 0x8045],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Delta', 'BitCount', 0x8046],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Delta', 'BitCount', 0x8047],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Delta', 'BitCount', 0x8048],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Delta', 'BitCount', 0x8049],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Delta', 'BitCount', 0x804a],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Delta', 'BitCount', 0x804b],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Delta', 'BitCount', 0x804c],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Delta', 'BitCount', 0x804d],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Delta', 'BitCount', 0x804e],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Delta', 'BitCount', 0x804f],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Delta', 'BitCount', 0x8050],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Delta', 'BitCount', 0x8051],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Delta', 'BitCount', 0x8052],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Delta', 'BitCount', 0x8053],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Delta', 'BitCount', 0x8054],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Delta', 'BitCount', 0x8055],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Delta', 'BitCount', 0x8056],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Delta', 'BitCount', 0x8057],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Delta', 'Bit0', 0x8058],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['', 'Delta', 'Bit1', 0x8058, '=', 'Value', '', 385],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Mem', 'BitCount', 0x8028],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Mem', 'BitCount', 0x8029],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Mem', 'BitCount', 0x802a],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Mem', 'BitCount', 0x802b],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Mem', 'BitCount', 0x802c],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Mem', 'BitCount', 0x802d],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Mem', 'BitCount', 0x802e],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Mem', 'BitCount', 0x802f],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Mem', 'BitCount', 0x8030],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Mem', 'BitCount', 0x8031],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Mem', 'BitCount', 0x8032],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Mem', 'BitCount', 0x8033],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Mem', 'BitCount', 0x8034],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Mem', 'BitCount', 0x8035],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Mem', 'BitCount', 0x8036],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Mem', 'BitCount', 0x8037],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Mem', 'BitCount', 0x8038],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Mem', 'BitCount', 0x8039],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Mem', 'BitCount', 0x803a],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Mem', 'BitCount', 0x803b],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Mem', 'BitCount', 0x803c],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Mem', 'BitCount', 0x803d],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Mem', 'BitCount', 0x803e],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Mem', 'BitCount', 0x803f],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Mem', 'BitCount', 0x8040],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Mem', 'BitCount', 0x8041],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Mem', 'BitCount', 0x8042],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Mem', 'BitCount', 0x8043],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Mem', 'BitCount', 0x8044],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Mem', 'BitCount', 0x8045],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Mem', 'BitCount', 0x8046],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Mem', 'BitCount', 0x8047],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Mem', 'BitCount', 0x8048],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Mem', 'BitCount', 0x8049],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Mem', 'BitCount', 0x804a],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Mem', 'BitCount', 0x804b],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Mem', 'BitCount', 0x804c],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Mem', 'BitCount', 0x804d],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Mem', 'BitCount', 0x804e],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Mem', 'BitCount', 0x804f],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Mem', 'BitCount', 0x8050],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Mem', 'BitCount', 0x8051],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Mem', 'BitCount', 0x8052],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Mem', 'BitCount', 0x8053],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Mem', 'BitCount', 0x8054],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Mem', 'BitCount', 0x8055],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Mem', 'BitCount', 0x8056],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Mem', 'BitCount', 0x8057],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['AddSource', 'Mem', 'Bit0', 0x8058],
-    ['AddAddress', 'Mem', '24bit', 0x5d90],
-    ['Measured', 'Mem', 'Bit1', 0x8058, '=', 'Value', '', 386],
+    ['AndNext', 'Mem', '8bit', 0x3f32c, '=', 'Value', '', 26],
+    ['AndNext', 'Mem', '8bit', 0x3f360, '=', 'Value', '', 20],
+    ['AndNext', 'Mem', '8bit', 0x3f362, '=', 'Value', '', 122],
+    ['AndNext', 'Mem', '8bit', 0xf48, '=', 'Value', '', 220],
+    ['AndNext', 'Mem', '8bit', 0x2c33a, '>', 'Delta', '8bit', 0x2c33a, 4],
+    ['', 'Mem', '8bit', 0x2c33a, '=', 'Value', '', 1],
+    ['AndNext', 'Mem', '8bit', 0x2c33a, '>', 'Delta', '8bit', 0x2c33a, 1],
+    ['AndNext', 'Mem', '8bit', 0x2c33a, '=', 'Value', '', 2, 1],
+    ['ResetIf', 'Mem', '8bit', 0x3f32c, '!=', 'Value', '', 26],
+    ['ResetIf', 'Mem', '8bit', 0x3f32c, '!=', 'Value', '', 26],
   ),
-  badge: '188967',
-  id: 168140,
+  badge: '201873',
+  id: 168013,
 })
+
+set.addAchievement({
+  title: 'Family Game Night',
+  description:
+  'In Set Mode, defeat the Winstrate family in your first battles with them without using items in battle and without any Pokemon being higher than level 24 at the beginning of the battle',
+  points: 5,
+  type: 'missable',
+  conditions: {
+    core: $(
+      ['AddAddress', 'Mem', '24bit', 0x5d8c],
+      ['AndNext', 'Mem', 'Bit1', 0x7069, '=', 'Value', '', 1],
+      ['AndNext', 'Mem', '8bit', 0x3f32c, '=', 'Value', '', 26],
+      ['AndNext', 'Mem', '8bit', 0x3f360, '=', 'Value', '', 20],
+      ['AndNext', 'Mem', '8bit', 0x3f362, '=', 'Value', '', 122],
+      ['AndNext', 'Mem', '8bit', 0x2c540, '<=', 'Value', '', 24, 1],
+      ['AndNext', 'Mem', '8bit', 0x2c5a4, '<=', 'Value', '', 24, 1],
+      ['AndNext', 'Mem', '8bit', 0x2c608, '<=', 'Value', '', 24, 1],
+      ['AndNext', 'Mem', '8bit', 0x2c66c, '<=', 'Value', '', 24, 1],
+      ['AndNext', 'Mem', '8bit', 0x2c6d0, '<=', 'Value', '', 24, 1],
+      ['AndNext', 'Mem', '8bit', 0x2c734, '<=', 'Value', '', 24, 1],
+      ['AndNext', 'Mem', '8bit', 0xf48, '=', 'Value', '', 220],
+      ['AndNext', 'Mem', '8bit', 0x2c33a, '>', 'Delta', '8bit', 0x2c33a, 4],
+      ['', 'Mem', '8bit', 0x2c33a, '=', 'Value', '', 1],
+      ['AndNext', 'Mem', '8bit', 0x2c33a, '>', 'Delta', '8bit', 0x2c33a],
+      ['AndNext', 'Mem', '8bit', 0x2c33a, '=', 'Value', '', 2],
+      ['ResetIf', 'Mem', '8bit', 0x3f32c, '!=', 'Value', '', 26],
+      ['AndNext', 'Mem', '8bit', 0x3f32c, '=', 'Value', '', 26],
+      ['AndNext', 'Mem', '8bit', 0x3f360, '=', 'Value', '', 20],
+      ['AndNext', 'Mem', '8bit', 0x3f362, '=', 'Value', '', 122],
+      ['AndNext', 'Mem', '8bit', 0xf48, '=', 'Value', '', 220],
+      ['PauseIf', 'Mem', '8bit', 0x16802, '=', 'Value', '', 2, 1],
+    ),
+    alt1: $(['', 'Mem', '8bit', 0xf48, '=', 'Mem', '8bit', 0xf48]),
+                   alt2: $(['ResetIf', 'Mem', '8bit', 0x3f32c, '!=', 'Value', '', 26]),
+  },
+  badge: '201874',
+  id: 168014,
+})
+// =================================
 
 export default set
