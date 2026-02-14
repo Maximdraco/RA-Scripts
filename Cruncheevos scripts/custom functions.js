@@ -93,6 +93,7 @@ import { AchievementSet, define as $ } from '@cruncheevos/core'
 // hit | Positive integers
 // console.log()
 
+
 // General functions
 export function is_dictionary(element){
     return (typeof element === 'object' && element !== null && !Array.isArray(element))
@@ -118,6 +119,7 @@ export function assembler(array, logic=undefined){
     }
     return x
 }
+
 
 export function simple_pointer(pointer, offset_logic){
     var type = pointer.type
